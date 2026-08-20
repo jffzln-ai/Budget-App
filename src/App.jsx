@@ -40,11 +40,17 @@ function AuthScreen() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const fn = mode === 'signin' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
-    const { error } = await fn({ email, password });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    if (mode === 'signup') setSignedUpMsg(true);
+    try {
+      const { error } = mode === 'signin'
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password });
+      if (error) { setError(error.message); return; }
+      if (mode === 'signup') setSignedUpMsg(true);
+    } catch (err) {
+      setError(err.message || 'Something went wrong. Try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
