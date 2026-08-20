@@ -82,6 +82,27 @@ export async function removeNetWorthItem(itemId) {
 // the credit-card-vs-asset sign convention right on top of that. Once CSV
 // import is built, the right fix is updating current_balance as part of
 // that import - not re-deriving it from possibly-incomplete data on every render.
+// Just the fields needed to build a dedupe key against a new import - not
+// the full row, since this only needs to answer "have I seen this exact
+// transaction before", not display anything.
+export async function getExistingTransactionKeys(householdId, accountId) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('date, raw_description, amount')
+    .eq('household_id', householdId)
+    .eq('account_id', accountId);
+  if (error) throw error;
+  return new Set(data.map(t => `${t.date}|${t.raw_description}|${t.amount}`));
+}
+
+export async function insertTransactions(householdId, accountId, rows) {
+  if (!rows.length) return;
+  const { error } = await supabase.from('transactions').insert(
+    rows.map(r => ({ household_id: householdId, account_id: accountId, source: 'csv_import', ...r }))
+  );
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
