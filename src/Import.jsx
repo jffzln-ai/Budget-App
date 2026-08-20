@@ -1,7 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getAccounts, getExistingTransactionKeys, insertTransactions } from './lib/queries.js';
+import {
+  getAccounts, getExistingTransactionKeys, insertTransactions,
+  getUnmatchedTransferCandidates, applyTransferMatches,
+  getAllTransactions, getTransactionTags, getRecurringRules, insertRecurringRuleCandidates,
+} from './lib/queries.js';
 import { detectCsvFormat, parseCsvRows } from './lib/csvParser.js';
 import { categorizeRaw } from './lib/categorize.js';
+import { matchTransfers, detectNewRecurring } from './lib/reconcile.js';
+
+function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, ' '); }
 
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
@@ -86,7 +93,30 @@ export default function Import({ householdId }) {
       // Tags need transaction ids we don't have back from a bulk insert without
       // .select() - deferred to the recategorize/tagging feature rather than
       // adding that complexity to the first working version of import.
-      setMsg({ tone: '#1F4D3D', text: `Added ${pending.rows.length} new transaction${pending.rows.length === 1 ? '' : 's'}${pending.skipped ? ` (${pending.skipped} already existed, skipped)` : ''}.` });
+
+      // Reconcile transfers: re-check everything still unmatched (not just
+      // what was just imported), since a new import can supply the missing
+      // half of a transfer that's been sitting unmatched for a while.
+      const unmatchedCandidates = await getUnmatchedTransferCandidates(householdId);
+      const transferMatches = matchTransfers(unmatchedCandidates);
+      if (transferMatches.length) await applyTransferMatches(transferMatches);
+
+      // Detect new recurring patterns: anything not already covered by an
+      // existing rule's match_keys, appearing 2+ times at a roughly fixed
+      // interval and amount.
+      const [allTxns, tagsById, existingRules] = await Promise.all([
+        getAllTransactions(householdId), getTransactionTags(householdId), getRecurringRules(householdId),
+      ]);
+      const existingKeys = new Set();
+      existingRules.forEach(r => (r.match_keys || []).forEach(mk => existingKeys.add(r.account_id + '::' + normalizeKey(mk))));
+      const newRuleCandidates = detectNewRecurring(allTxns, tagsById, existingKeys);
+      if (newRuleCandidates.length) await insertRecurringRuleCandidates(householdId, newRuleCandidates);
+
+      const parts = [`Added ${pending.rows.length} new transaction${pending.rows.length === 1 ? '' : 's'}`];
+      if (pending.skipped) parts.push(`${pending.skipped} already existed and were skipped`);
+      if (transferMatches.length) parts.push(`matched ${transferMatches.length / 2} transfer pair${transferMatches.length / 2 === 1 ? '' : 's'}`);
+      if (newRuleCandidates.length) parts.push(`found ${newRuleCandidates.length} new recurring pattern${newRuleCandidates.length === 1 ? '' : 's'} to review in Upcoming`);
+      setMsg({ tone: '#1F4D3D', text: parts.join(', ') + '.' });
       setPending(null);
     } catch (err) {
       setMsg({ tone: '#9C4A34', text: err.message });
