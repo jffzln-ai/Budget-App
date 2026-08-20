@@ -139,6 +139,35 @@ export async function toggleSkipOccurrence(ruleId, currentSkippedDates, date) {
   if (error) throw error;
 }
 
+export async function getUnmatchedTransferCandidates(householdId) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, account_id, date, raw_description, amount')
+    .eq('household_id', householdId)
+    .eq('is_transfer', true)
+    .is('transfer_group_id', null);
+  if (error) throw error;
+  return data;
+}
+
+// PostgREST doesn't support a single bulk update with different values per
+// row, so this is a loop of individual updates - fine at the scale a
+// reconcile pass actually touches (a handful of transactions per import).
+export async function applyTransferMatches(matches) {
+  for (const m of matches) {
+    const { error } = await supabase.from('transactions').update({ transfer_group_id: m.transfer_group_id, needs_review: false }).eq('id', m.id);
+    if (error) throw error;
+  }
+}
+
+export async function insertRecurringRuleCandidates(householdId, candidates) {
+  if (!candidates.length) return;
+  const { error } = await supabase.from('recurring_rules').insert(
+    candidates.map(c => ({ household_id: householdId, ...c }))
+  );
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
