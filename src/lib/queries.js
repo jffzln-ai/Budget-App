@@ -184,6 +184,21 @@ export async function removePlannedTransaction(id) {
   if (error) throw error;
 }
 
+export async function dismissRule(ruleId) {
+  const { error } = await supabase.from('recurring_rules').update({ status: 'dismissed' }).eq('id', ruleId);
+  if (error) throw error;
+}
+
+export async function updateRuleAmount(ruleId, amount) {
+  const { error } = await supabase.from('recurring_rules').update({ expected_amount: amount }).eq('id', ruleId);
+  if (error) throw error;
+}
+
+export async function updatePlannedTransaction(id, fields) {
+  const { error } = await supabase.from('planned_transactions').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
