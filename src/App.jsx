@@ -3,6 +3,7 @@ import { supabase } from './lib/supabaseClient.js';
 import { getHousehold } from './lib/queries.js';
 import Overview from './Overview.jsx';
 import Transactions from './Transactions.jsx';
+import Upcoming from './Upcoming.jsx';
 
 const styles = {
   page: {
@@ -112,7 +113,7 @@ function DashboardScreen({ session }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <nav style={{ display: 'flex', gap: 16 }}>
               {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => {
-                const enabled = t === 'overview' || t === 'transactions';
+                const enabled = t === 'overview' || t === 'transactions' || t === 'upcoming';
                 return (
                   <button
                     key={t}
@@ -136,6 +137,7 @@ function DashboardScreen({ session }) {
         {!loadErr && !household && <div style={{ color: 'rgba(248,246,240,0.6)' }}>Loading…</div>}
         {household && tab === 'overview' && <Overview householdId={household.householdId} />}
         {household && tab === 'transactions' && <Transactions householdId={household.householdId} />}
+        {household && tab === 'upcoming' && <Upcoming householdId={household.householdId} />}
       </div>
     </div>
   );
