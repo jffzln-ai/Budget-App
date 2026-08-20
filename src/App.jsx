@@ -4,6 +4,7 @@ import { getHousehold } from './lib/queries.js';
 import Overview from './Overview.jsx';
 import Transactions from './Transactions.jsx';
 import Upcoming from './Upcoming.jsx';
+import Allocations from './Allocations.jsx';
 
 const styles = {
   page: {
@@ -113,7 +114,7 @@ function DashboardScreen({ session }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <nav style={{ display: 'flex', gap: 16 }}>
               {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => {
-                const enabled = t === 'overview' || t === 'transactions' || t === 'upcoming';
+                const enabled = t === 'overview' || t === 'transactions' || t === 'upcoming' || t === 'allocations';
                 return (
                   <button
                     key={t}
@@ -138,6 +139,7 @@ function DashboardScreen({ session }) {
         {household && tab === 'overview' && <Overview householdId={household.householdId} />}
         {household && tab === 'transactions' && <Transactions householdId={household.householdId} />}
         {household && tab === 'upcoming' && <Upcoming householdId={household.householdId} />}
+        {household && tab === 'allocations' && <Allocations householdId={household.householdId} />}
       </div>
     </div>
   );
