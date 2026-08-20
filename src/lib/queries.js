@@ -52,15 +52,38 @@ export async function confirmRule(ruleId) {
   if (error) throw error;
 }
 
-export function computeLiveBalances(accounts, transactions) {
-  const latestByAccount = {};
-  transactions.forEach(t => {
-    const cur = latestByAccount[t.account_id];
-    if (!cur || t.date >= cur.date) latestByAccount[t.account_id] = t;
-  });
+export async function getNetWorthItems(householdId) {
+  const { data, error } = await supabase
+    .from('net_worth_items')
+    .select('*')
+    .eq('household_id', householdId)
+    .order('created_at');
+  if (error) throw error;
+  return data;
+}
+
+export async function addNetWorthItem(householdId, item) {
+  const { error } = await supabase
+    .from('net_worth_items')
+    .insert({ household_id: householdId, ...item });
+  if (error) throw error;
+}
+
+export async function removeNetWorthItem(itemId) {
+  const { error } = await supabase.from('net_worth_items').delete().eq('id', itemId);
+  if (error) throw error;
+}
+
+// current_balance is the authoritative balance for every account. There's no
+// CSV import in the app yet, so nothing can make this stale - deriving a
+// balance from transaction history instead would need to handle same-day
+// ordering (no sequence column exists) and gaps in that history (several
+// accounts, e.g. the travel card, have known incomplete coverage), and get
+// the credit-card-vs-asset sign convention right on top of that. Once CSV
+// import is built, the right fix is updating current_balance as part of
+// that import - not re-deriving it from possibly-incomplete data on every render.
+export function computeLiveBalances(accounts) {
   const balances = {};
-  accounts.forEach(a => {
-    balances[a.id] = latestByAccount[a.id] ? latestByAccount[a.id].running_balance : a.current_balance;
-  });
+  accounts.forEach(a => { balances[a.id] = a.current_balance; });
   return balances;
 }
