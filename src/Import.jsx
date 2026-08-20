@@ -19,6 +19,7 @@ export default function Import({ householdId }) {
   const [pending, setPending] = useState(null); // { rows, skipped, formatMismatch, detected }
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -102,11 +103,28 @@ export default function Import({ householdId }) {
       <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 14, lineHeight: 1.5 }}>
         Pick which account this CSV is from, then upload the TD export. New transactions get categorized and checked against what's already in the database automatically.
       </div>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-        <select style={s.field} value={accountId} onChange={e => { setAccountId(e.target.value); setPending(null); setMsg(null); }}>
+      <div style={{ marginBottom: 14 }}>
+        <select style={{ ...s.field, marginBottom: 10 }} value={accountId} onChange={e => { setAccountId(e.target.value); setPending(null); setMsg(null); }}>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <button style={s.btn} onClick={() => fileInputRef.current.click()}>Choose CSV</button>
+        <div
+          onClick={() => fileInputRef.current.click()}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files[0];
+            if (f) handleFile(f);
+          }}
+          style={{
+            border: `2px dashed ${dragOver ? '#1F4D3D' : '#E3DECF'}`, borderRadius: 6, padding: '24px 16px',
+            textAlign: 'center', cursor: 'pointer', background: dragOver ? '#EEF3EF' : '#fff', transition: 'all 0.15s',
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B211D' }}>Drop a CSV here, or click to browse</div>
+          <div style={{ fontSize: 11.5, color: '#6B7268', marginTop: 4 }}>TD export for the account selected above</div>
+        </div>
         <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }} />
       </div>
 
