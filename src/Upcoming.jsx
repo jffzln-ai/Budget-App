@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getRecurringRules, confirmRule } from './lib/queries.js';
+import { getRecurringRules, confirmRule, toggleSkipOccurrence } from './lib/queries.js';
 
 const CADENCE_STEP_DAYS = { weekly: 7, biweekly: 14, monthly: 30, quarterly: 90, annual: 365 };
 const STATUS_LABEL = { active: 'Confirmed', needs_confirmation: 'Needs confirmation', pending_info: 'Waiting on you', dismissed: 'Dismissed' };
@@ -42,12 +42,13 @@ const s = {
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
   badge: (color) => ({ fontSize: 11, fontWeight: 600, color, border: `1px solid ${color}`, borderRadius: 3, padding: '2px 6px', textTransform: 'uppercase' }),
   btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
 };
 
 export default function Upcoming({ householdId }) {
   const [rules, setRules] = useState(null);
   const [error, setError] = useState(null);
-  const [confirming, setConfirming] = useState(null);
+  const [busyKey, setBusyKey] = useState(null);
 
   async function load() {
     try {
@@ -66,19 +67,58 @@ export default function Upcoming({ householdId }) {
   const unscheduled = (rules || []).filter(r => r.status !== 'dismissed' && !r.next_expected_date);
 
   async function handleConfirm(rule) {
-    setConfirming(rule.id);
+    setBusyKey(rule.id);
     try {
       await confirmRule(rule.id);
-      await load(); // re-fetch so the confirmed status reflects everywhere immediately
+      await load();
     } catch (err) {
       setError(err.message);
     } finally {
-      setConfirming(null);
+      setBusyKey(null);
+    }
+  }
+
+  async function handleSkip(occ) {
+    setBusyKey(occ.occId);
+    try {
+      await toggleSkipOccurrence(occ.rule.id, occ.rule.skipped_dates || [], occ.date);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyKey(null);
     }
   }
 
   if (error) return <div style={{ color: '#9C4A34' }}>{error}</div>;
   if (!rules) return <div style={{ color: '#6B7268' }}>Loading upcoming…</div>;
+
+  function renderOccurrence(o, moneyColor) {
+    const isSkipped = (o.rule.skipped_dates || []).includes(o.date);
+    const busy = busyKey === o.rule.id || busyKey === o.occId;
+    return (
+      <div key={o.occId} style={{ ...s.row, opacity: isSkipped ? 0.55 : 1 }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, textDecoration: isSkipped ? 'line-through' : 'none' }}>{o.rule.label}</div>
+          <div style={{ fontSize: 11, color: '#6B7268' }}>{fmtDate(o.date)} · {o.rule.cadence}{isSkipped ? ' · skipped' : ''}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: isSkipped ? '#6B7268' : moneyColor }}>
+            {moneyColor === '#1F4D3D' ? '+' : ''}{fmtCAD(o.rule.expected_amount)}
+          </span>
+          {!isIncome(o.rule.category) && o.rule.status !== 'needs_confirmation' && (
+            <button style={s.ghostBtn} disabled={busy} onClick={() => handleSkip(o)}>{busy ? '…' : isSkipped ? 'Restore' : 'Skip'}</button>
+          )}
+          {!isIncome(o.rule.category) && (
+            <span style={s.badge(STATUS_COLOR[o.rule.status])}>{STATUS_LABEL[o.rule.status]}</span>
+          )}
+          {o.rule.status === 'needs_confirmation' && (
+            <button style={s.btn} disabled={busy} onClick={() => handleConfirm(o.rule)}>{busy ? 'Saving…' : 'Confirm'}</button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -94,37 +134,13 @@ export default function Upcoming({ householdId }) {
       {moneyIn.length > 0 && (
         <div style={{ ...s.card, marginBottom: 14 }}>
           <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#1F4D3D' }}>Money in</div>
-          {moneyIn.map(o => (
-            <div key={o.occId} style={s.row}>
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 500 }}>{o.rule.label}</div>
-                <div style={{ fontSize: 11, color: '#6B7268' }}>{fmtDate(o.date)} · {o.rule.cadence}</div>
-              </div>
-              <div style={{ ...s.num, fontSize: 14, fontWeight: 600, color: '#1F4D3D' }}>+{fmtCAD(o.rule.expected_amount)}</div>
-            </div>
-          ))}
+          {moneyIn.map(o => renderOccurrence(o, '#1F4D3D'))}
         </div>
       )}
 
       <div style={s.card}>
         <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7268' }}>Money out</div>
-        {moneyOut.map(o => (
-          <div key={o.occId} style={s.row}>
-            <div>
-              <div style={{ fontSize: 13.5, fontWeight: 500 }}>{o.rule.label}</div>
-              <div style={{ fontSize: 11, color: '#6B7268' }}>{fmtDate(o.date)} · {o.rule.cadence}</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ ...s.num, fontSize: 14, fontWeight: 600 }}>{fmtCAD(o.rule.expected_amount)}</span>
-              <span style={s.badge(STATUS_COLOR[o.rule.status])}>{STATUS_LABEL[o.rule.status]}</span>
-              {o.rule.status === 'needs_confirmation' && (
-                <button style={s.btn} disabled={confirming === o.rule.id} onClick={() => handleConfirm(o.rule)}>
-                  {confirming === o.rule.id ? 'Saving…' : 'Confirm'}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+        {moneyOut.map(o => renderOccurrence(o, '#1B211D'))}
         {moneyOut.length === 0 && <div style={{ padding: 24, fontSize: 13, color: '#6B7268' }}>Nothing projected.</div>}
       </div>
     </div>
