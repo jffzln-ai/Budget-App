@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabaseClient.js';
 import { getHousehold } from './lib/queries.js';
 import Overview from './Overview.jsx';
+import Transactions from './Transactions.jsx';
 
 const styles = {
   page: {
@@ -110,19 +111,22 @@ function DashboardScreen({ session }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <nav style={{ display: 'flex', gap: 16 }}>
-              {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  disabled={t !== 'overview'}
-                  style={{
-                    background: 'none', border: 'none', padding: '4px 0', fontSize: 13, fontWeight: 600,
-                    textTransform: 'capitalize', cursor: t === 'overview' ? 'pointer' : 'default',
-                    color: t === tab ? '#F8F6F0' : t === 'overview' ? 'rgba(248,246,240,0.55)' : 'rgba(248,246,240,0.25)',
-                    borderBottom: t === tab ? '2px solid #B8894A' : '2px solid transparent',
-                  }}
-                >{t}{t !== 'overview' ? ' (soon)' : ''}</button>
-              ))}
+              {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => {
+                const enabled = t === 'overview' || t === 'transactions';
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    disabled={!enabled}
+                    style={{
+                      background: 'none', border: 'none', padding: '4px 0', fontSize: 13, fontWeight: 600,
+                      textTransform: 'capitalize', cursor: enabled ? 'pointer' : 'default',
+                      color: t === tab ? '#F8F6F0' : enabled ? 'rgba(248,246,240,0.55)' : 'rgba(248,246,240,0.25)',
+                      borderBottom: t === tab ? '2px solid #B8894A' : '2px solid transparent',
+                    }}
+                  >{t}{!enabled ? ' (soon)' : ''}</button>
+                );
+              })}
             </nav>
             <button onClick={() => supabase.auth.signOut()} style={{ background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Sign out</button>
           </div>
@@ -131,6 +135,7 @@ function DashboardScreen({ session }) {
         {loadErr && <div style={{ color: '#9C4A34' }}>Couldn't load your household: {loadErr}</div>}
         {!loadErr && !household && <div style={{ color: 'rgba(248,246,240,0.6)' }}>Loading…</div>}
         {household && tab === 'overview' && <Overview householdId={household.householdId} />}
+        {household && tab === 'transactions' && <Transactions householdId={household.householdId} />}
       </div>
     </div>
   );
