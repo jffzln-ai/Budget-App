@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAccounts, getAllTransactions, computeLiveBalances } from './lib/queries.js';
+import { getAccounts, getNetWorthItems, computeLiveBalances } from './lib/queries.js';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -16,16 +16,18 @@ const s = {
 export default function Overview({ householdId }) {
   const [accounts, setAccounts] = useState(null);
   const [balances, setBalances] = useState({});
+  const [netWorthItems, setNetWorthItems] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [accs, txns] = await Promise.all([getAccounts(householdId), getAllTransactions(householdId)]);
+        const [accs, items] = await Promise.all([getAccounts(householdId), getNetWorthItems(householdId)]);
         if (cancelled) return;
         setAccounts(accs);
-        setBalances(computeLiveBalances(accs, txns));
+        setBalances(computeLiveBalances(accs));
+        setNetWorthItems(items);
       } catch (err) {
         if (!cancelled) setError(err.message);
       }
@@ -36,14 +38,16 @@ export default function Overview({ householdId }) {
   if (error) return <div style={{ color: '#9C4A34' }}>Couldn't load accounts: {error}</div>;
   if (!accounts) return <div style={{ color: '#6B7268' }}>Loading accounts…</div>;
 
-  const netWorth = accounts.reduce((sum, a) => sum + (balances[a.id] || 0), 0);
+  const accountsNetWorth = accounts.reduce((sum, a) => sum + (balances[a.id] || 0), 0);
+  const manualNetWorth = netWorthItems.reduce((sum, i) => sum + (i.type === 'liability' ? -i.value : i.value), 0);
+  const netWorth = accountsNetWorth + manualNetWorth;
 
   return (
     <div>
       <div style={{ ...s.card, marginBottom: 16 }}>
         <div style={s.label}>Net worth</div>
         <div style={{ ...s.num, fontSize: 30, fontWeight: 600, color: netWorth < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(netWorth)}</div>
-        <div style={{ fontSize: 11, color: '#6B7268', marginTop: 4 }}>all accounts</div>
+        <div style={{ fontSize: 11, color: '#6B7268', marginTop: 4 }}>all accounts{netWorthItems.length ? ` + ${netWorthItems.length} other item${netWorthItems.length === 1 ? '' : 's'}` : ''}</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
         {accounts.map(a => (
