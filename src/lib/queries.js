@@ -103,6 +103,42 @@ export async function insertTransactions(householdId, accountId, rows) {
   if (error) throw error;
 }
 
+export async function updateTransaction(transactionId, fields) {
+  const { error } = await supabase.from('transactions').update(fields).eq('id', transactionId);
+  if (error) throw error;
+}
+
+// Tags joined through transactions so RLS (which checks the transaction's
+// household_id) applies without needing a household_id column on the tags
+// table itself.
+export async function getTransactionTags(householdId) {
+  const { data, error } = await supabase
+    .from('transaction_tags')
+    .select('transaction_id, tag, transactions!inner(household_id)')
+    .eq('transactions.household_id', householdId);
+  if (error) throw error;
+  const map = {};
+  data.forEach(t => { (map[t.transaction_id] = map[t.transaction_id] || []).push(t.tag); });
+  return map;
+}
+
+export async function addTransactionTag(transactionId, tag) {
+  const { error } = await supabase.from('transaction_tags').insert({ transaction_id: transactionId, tag });
+  if (error) throw error;
+}
+
+export async function removeTransactionTag(transactionId, tag) {
+  const { error } = await supabase.from('transaction_tags').delete().eq('transaction_id', transactionId).eq('tag', tag);
+  if (error) throw error;
+}
+
+export async function toggleSkipOccurrence(ruleId, currentSkippedDates, date) {
+  const isSkipped = currentSkippedDates.includes(date);
+  const next = isSkipped ? currentSkippedDates.filter(d => d !== date) : [...currentSkippedDates, date];
+  const { error } = await supabase.from('recurring_rules').update({ skipped_dates: next }).eq('id', ruleId);
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
