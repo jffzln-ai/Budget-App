@@ -35,6 +35,23 @@ export async function getAllTransactions(householdId) {
   return data;
 }
 
+export async function getRecurringRules(householdId) {
+  const { data, error } = await supabase
+    .from('recurring_rules')
+    .select('*')
+    .eq('household_id', householdId);
+  if (error) throw error;
+  return data;
+}
+
+export async function confirmRule(ruleId) {
+  const { error } = await supabase
+    .from('recurring_rules')
+    .update({ status: 'active' })
+    .eq('id', ruleId);
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts, transactions) {
   const latestByAccount = {};
   transactions.forEach(t => {
