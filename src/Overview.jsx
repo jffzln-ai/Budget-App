@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getAccounts, getNetWorthItems, getRecurringRules, getAllTransactions, getTransactionTags, computeLiveBalances } from './lib/queries.js';
+import { getAccounts, getNetWorthItems, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, computeLiveBalances } from './lib/queries.js';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 
 function fmtCAD(n) {
@@ -42,6 +42,7 @@ export default function Overview({ householdId }) {
   const [rules, setRules] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
+  const [plannedTxns, setPlannedTxns] = useState([]);
   const [error, setError] = useState(null);
   const [horizon, setHorizon] = useState('payday');
 
@@ -49,9 +50,9 @@ export default function Overview({ householdId }) {
     let cancelled = false;
     (async () => {
       try {
-        const [accs, items, r, txns, tagMap] = await Promise.all([
+        const [accs, items, r, txns, tagMap, planned] = await Promise.all([
           getAccounts(householdId), getNetWorthItems(householdId), getRecurringRules(householdId),
-          getAllTransactions(householdId), getTransactionTags(householdId),
+          getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId),
         ]);
         if (cancelled) return;
         setAccounts(accs);
@@ -59,6 +60,7 @@ export default function Overview({ householdId }) {
         setRules(r);
         setTransactions(txns);
         setTags(tagMap);
+        setPlannedTxns(planned);
       } catch (err) {
         if (!cancelled) setError(err.message);
       }
@@ -73,7 +75,18 @@ export default function Overview({ householdId }) {
   const infinity = accounts ? accounts.find(a => a.name === 'Infinity') : null;
   const cashOnHand = infinity ? balances[infinity.id] : 0;
 
-  const occurrences = useMemo(() => (rules ? projectOccurrences(rules) : []), [rules]);
+  const occurrences = useMemo(() => {
+    const fromRules = rules ? projectOccurrences(rules) : [];
+    const fromPlanned = plannedTxns.map(p => ({
+      occId: p.id,
+      rule: {
+        id: p.id, account_id: p.account_id, label: p.description, category: 'Planned', cadence: 'once',
+        expected_amount: Math.abs(p.amount), status: 'active', planned: true, is_income: p.amount > 0,
+      },
+      date: p.date,
+    }));
+    return [...fromRules, ...fromPlanned];
+  }, [rules, plannedTxns]);
 
   const infinityFutureOcc = useMemo(() => {
     if (!infinity) return [];
@@ -85,7 +98,7 @@ export default function Overview({ householdId }) {
     );
   }, [occurrences, infinity, today]);
 
-  const nextPayrollOcc = infinityFutureOcc.filter(o => isIncome(o.rule.category)).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const nextPayrollOcc = infinityFutureOcc.filter(o => isIncome(o.rule)).sort((a, b) => a.date.localeCompare(b.date))[0];
   const nextPayrollDate = nextPayrollOcc ? nextPayrollOcc.date : null;
   const daysToPayday = nextPayrollDate ? Math.round((new Date(nextPayrollDate) - new Date(today)) / 86400000) : null;
 
@@ -94,14 +107,14 @@ export default function Overview({ householdId }) {
   const committedThroughHorizon = useMemo(() => {
     if (!horizonEndDate) return 0;
     return infinityFutureOcc
-      .filter(o => !isIncome(o.rule.category) && o.date <= horizonEndDate)
+      .filter(o => !isIncome(o.rule) && o.date <= horizonEndDate)
       .reduce((sum, o) => sum + o.rule.expected_amount, 0);
   }, [infinityFutureOcc, horizonEndDate]);
 
   const incomeThroughHorizon = useMemo(() => {
     if (!horizonEndDate) return 0;
     return infinityFutureOcc
-      .filter(o => isIncome(o.rule.category) && o.date <= horizonEndDate)
+      .filter(o => isIncome(o.rule) && o.date <= horizonEndDate)
       .reduce((sum, o) => sum + o.rule.expected_amount, 0);
   }, [infinityFutureOcc, horizonEndDate]);
 
