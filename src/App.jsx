@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabaseClient.js';
+import { getHousehold } from './lib/queries.js';
+import Overview from './Overview.jsx';
 
 const styles = {
   page: {
@@ -80,42 +82,55 @@ function AuthScreen() {
   );
 }
 
-function HouseholdScreen({ session }) {
+function DashboardScreen({ session }) {
   const [household, setHousehold] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
+  const [tab, setTab] = useState('overview');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from('household_members')
-        .select('role, households ( id, name )')
-        .eq('user_id', session.user.id)
-        .single();
-      if (cancelled) return;
-      if (error) setLoadErr(error.message);
-      else setHousehold(data);
+      try {
+        const h = await getHousehold(session.user.id);
+        if (!cancelled) setHousehold(h);
+      } catch (err) {
+        if (!cancelled) setLoadErr(err.message);
+      }
     })();
     return () => { cancelled = true; };
   }, [session.user.id]);
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.title}>Ledger</div>
-        <div style={styles.sub}>Signed in as {session.user.email}</div>
-        {loadErr && <div style={styles.error}>Couldn't load your household: {loadErr}</div>}
-        {!loadErr && !household && <div style={{ fontSize: 13.5, color: '#6B7268' }}>Loading…</div>}
-        {household && (
-          <div style={{ fontSize: 14, color: '#1B211D', lineHeight: 1.6 }}>
-            Household: <strong>{household.households.name}</strong><br />
-            Your role: <span style={styles.num}>{household.role}</span>
-            <div style={{ fontSize: 12, color: '#6B7268', marginTop: 10 }}>
-              This confirms auth, RLS, and the household bootstrap trigger are all working end to end. The real dashboard gets built on top of this next.
-            </div>
+    <div style={{ minHeight: '100vh', background: '#16201C', fontFamily: "'Inter', sans-serif", padding: '28px 16px 60px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 22, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 600, color: '#F8F6F0' }}>Ledger</div>
+            <div style={{ fontSize: 12, color: 'rgba(248,246,240,0.55)', marginTop: 2 }}>{session.user.email}</div>
           </div>
-        )}
-        <button style={styles.button} onClick={() => supabase.auth.signOut()}>Sign out</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            <nav style={{ display: 'flex', gap: 16 }}>
+              {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  disabled={t !== 'overview'}
+                  style={{
+                    background: 'none', border: 'none', padding: '4px 0', fontSize: 13, fontWeight: 600,
+                    textTransform: 'capitalize', cursor: t === 'overview' ? 'pointer' : 'default',
+                    color: t === tab ? '#F8F6F0' : t === 'overview' ? 'rgba(248,246,240,0.55)' : 'rgba(248,246,240,0.25)',
+                    borderBottom: t === tab ? '2px solid #B8894A' : '2px solid transparent',
+                  }}
+                >{t}{t !== 'overview' ? ' (soon)' : ''}</button>
+              ))}
+            </nav>
+            <button onClick={() => supabase.auth.signOut()} style={{ background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Sign out</button>
+          </div>
+        </header>
+
+        {loadErr && <div style={{ color: '#9C4A34' }}>Couldn't load your household: {loadErr}</div>}
+        {!loadErr && !household && <div style={{ color: 'rgba(248,246,240,0.6)' }}>Loading…</div>}
+        {household && tab === 'overview' && <Overview householdId={household.householdId} />}
       </div>
     </div>
   );
@@ -131,5 +146,5 @@ export default function App() {
   }, []);
 
   if (session === undefined) return <div style={styles.page}><div style={{ color: '#F8F6F0' }}>Loading…</div></div>;
-  return session ? <HouseholdScreen session={session} /> : <AuthScreen />;
+  return session ? <DashboardScreen session={session} /> : <AuthScreen />;
 }
