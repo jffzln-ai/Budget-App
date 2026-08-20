@@ -168,6 +168,22 @@ export async function insertRecurringRuleCandidates(householdId, candidates) {
   if (error) throw error;
 }
 
+export async function getPlannedTransactions(householdId) {
+  const { data, error } = await supabase.from('planned_transactions').select('*').eq('household_id', householdId).order('date');
+  if (error) throw error;
+  return data;
+}
+
+export async function addPlannedTransaction(householdId, fields) {
+  const { error } = await supabase.from('planned_transactions').insert({ household_id: householdId, ...fields });
+  if (error) throw error;
+}
+
+export async function removePlannedTransaction(id) {
+  const { error } = await supabase.from('planned_transactions').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
