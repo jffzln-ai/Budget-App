@@ -97,8 +97,13 @@ export async function getExistingTransactionKeys(householdId, accountId) {
 
 export async function insertTransactions(householdId, accountId, rows) {
   if (!rows.length) return;
-  const { error } = await supabase.from('transactions').insert(
-    rows.map(r => ({ household_id: householdId, account_id: accountId, source: 'csv_import', ...r }))
+  // onConflict targets the DB-level uniqueness constraint (household_id,
+  // account_id, date, raw_description, amount) - if a row somehow still
+  // collides with something already there despite the client-side dedup
+  // check, this skips it silently instead of erroring or duplicating.
+  const { error } = await supabase.from('transactions').upsert(
+    rows.map(r => ({ household_id: householdId, account_id: accountId, source: 'csv_import', ...r })),
+    { onConflict: 'household_id,account_id,date,raw_description,amount', ignoreDuplicates: true }
   );
   if (error) throw error;
 }
