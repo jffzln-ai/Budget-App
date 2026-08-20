@@ -45,6 +45,7 @@ export default function Overview({ householdId }) {
   const [plannedTxns, setPlannedTxns] = useState([]);
   const [error, setError] = useState(null);
   const [horizon, setHorizon] = useState('payday');
+  const [netWorthCollapsed, setNetWorthCollapsed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,9 +151,24 @@ export default function Overview({ householdId }) {
   return (
     <div>
       <div style={{ ...s.card, marginBottom: 14 }}>
-        <div style={s.label}>Net worth</div>
-        <div style={{ ...s.num, fontSize: 30, fontWeight: 600, color: netWorth < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(netWorth)}</div>
-        <div style={{ fontSize: 11, color: '#6B7268', marginTop: 4 }}>all accounts{netWorthItems.length ? ` + ${netWorthItems.length} other item${netWorthItems.length === 1 ? '' : 's'}` : ''}</div>
+        {netWorthCollapsed ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setNetWorthCollapsed(false)}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <div style={s.label}>Net worth</div>
+              <span style={{ ...s.num, fontSize: 18, fontWeight: 600, color: netWorth < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(netWorth)}</span>
+            </div>
+            <span style={{ color: '#6B7268', fontSize: 12 }}>▾</span>
+          </div>
+        ) : (<>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setNetWorthCollapsed(true)}>
+              <div style={s.label}>Net worth</div>
+              <span style={{ color: '#6B7268', fontSize: 11, marginTop: -6 }}>▴</span>
+            </div>
+          </div>
+          <div style={{ ...s.num, fontSize: 30, fontWeight: 600, color: netWorth < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(netWorth)}</div>
+          <div style={{ fontSize: 11, color: '#6B7268', marginTop: 4 }}>all accounts{netWorthItems.length ? ` + ${netWorthItems.length} other item${netWorthItems.length === 1 ? '' : 's'}` : ''}</div>
+        </>)}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 14 }}>
