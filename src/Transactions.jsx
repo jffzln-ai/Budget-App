@@ -22,6 +22,13 @@ const s = {
   primaryBtn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
 };
 
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+function ymKey(date) { return date.slice(0, 7); }
+function monthLabel(ym) {
+  const [y, m] = ym.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+}
+
 export default function Transactions({ householdId }) {
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
@@ -29,6 +36,7 @@ export default function Transactions({ householdId }) {
   const [error, setError] = useState(null);
   const [q, setQ] = useState('');
   const [accountFilter, setAccountFilter] = useState('all');
+  const [period, setPeriod] = useState('all');
   const [showTransfers, setShowTransfers] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
   const [editingDetailsId, setEditingDetailsId] = useState(null);
@@ -59,14 +67,43 @@ export default function Transactions({ householdId }) {
     return Array.from(new Set(transactions.map(t => t.category))).sort();
   }, [transactions]);
 
+  const today = todayIso();
+
+  // "This pay period" = since the most recent actual Payroll transaction on
+  // or before today. Derived from real transaction history rather than
+  // projecting from the recurring rule, since it's the same number either
+  // way but doesn't need a second fetch.
+  const lastPaydayDate = useMemo(() => {
+    if (!transactions) return null;
+    const payrolls = transactions.filter(t => t.category === 'Payroll' && t.date <= today).sort((a, b) => b.date.localeCompare(a.date));
+    return payrolls.length ? payrolls[0].date : null;
+  }, [transactions, today]);
+
+  const availableMonths = useMemo(() => {
+    if (!transactions) return [];
+    return Array.from(new Set(transactions.map(t => ymKey(t.date)))).sort().reverse();
+  }, [transactions]);
+
   const filtered = useMemo(() => {
     if (!transactions) return [];
     return transactions
       .filter(t => accountFilter === 'all' || t.account_id === accountFilter)
       .filter(t => showTransfers || !t.is_transfer)
       .filter(t => !q || t.raw_description.toLowerCase().includes(q.toLowerCase()))
+      .filter(t => {
+        if (period === 'all') return true;
+        if (period === 'pay_period') return lastPaydayDate && t.date >= lastPaydayDate;
+        return ymKey(t.date) === period;
+      })
       .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  }, [transactions, accountFilter, showTransfers, q]);
+  }, [transactions, accountFilter, showTransfers, q, period, lastPaydayDate]);
+
+  const totals = useMemo(() => {
+    const nonTransfer = filtered.filter(t => !t.is_transfer);
+    const income = nonTransfer.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+    const expense = Math.abs(nonTransfer.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+    return { income, expense, net: income - expense };
+  }, [filtered]);
 
   async function handleRecategorize(txn, category) {
     setEditingCategoryId(null);
@@ -126,11 +163,21 @@ export default function Transactions({ householdId }) {
           <option value="all">All accounts</option>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
+        <select style={s.field} value={period} onChange={e => setPeriod(e.target.value)}>
+          <option value="all">All time</option>
+          {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
+          {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+        </select>
         <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: '#6B7268' }}>
           <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
           Show internal transfers
         </label>
         <div style={{ fontSize: 12, color: '#6B7268', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
+      </div>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'baseline', background: '#FCFBF8' }}>
+        <span style={{ fontSize: 12, color: '#6B7268' }}>In: <span style={{ ...s.num, color: '#1F4D3D', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        <span style={{ fontSize: 12, color: '#6B7268' }}>Out: <span style={{ ...s.num, color: '#1B211D', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        <span style={{ fontSize: 12, color: '#6B7268' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(totals.net)}</span></span>
       </div>
       <div>
         {filtered.map(t => {
