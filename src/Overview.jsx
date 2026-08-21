@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getAccounts, getNetWorthItems, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, computeLiveBalances } from './lib/queries.js';
+import { getAccounts, getNetWorthItems, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 
 function fmtCAD(n) {
@@ -43,17 +43,20 @@ export default function Overview({ householdId }) {
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
   const [plannedTxns, setPlannedTxns] = useState([]);
+  const [budgets, setBudgets] = useState([]);
   const [error, setError] = useState(null);
   const [horizon, setHorizon] = useState('payday');
   const [netWorthCollapsed, setNetWorthCollapsed] = useState(false);
+  const [editingBudgetCat, setEditingBudgetCat] = useState(null);
+  const [budgetDraft, setBudgetDraft] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [accs, items, r, txns, tagMap, planned] = await Promise.all([
+        const [accs, items, r, txns, tagMap, planned, budgetRows] = await Promise.all([
           getAccounts(householdId), getNetWorthItems(householdId), getRecurringRules(householdId),
-          getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId),
+          getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
         ]);
         if (cancelled) return;
         setAccounts(accs);
@@ -62,12 +65,31 @@ export default function Overview({ householdId }) {
         setTransactions(txns);
         setTags(tagMap);
         setPlannedTxns(planned);
+        setBudgets(budgetRows);
       } catch (err) {
         if (!cancelled) setError(err.message);
       }
     })();
     return () => { cancelled = true; };
   }, [householdId]);
+
+  async function reload() {
+    try {
+      const [accs, items, r, txns, tagMap, planned, budgetRows] = await Promise.all([
+        getAccounts(householdId), getNetWorthItems(householdId), getRecurringRules(householdId),
+        getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
+      ]);
+      setAccounts(accs);
+      setNetWorthItems(items);
+      setRules(r);
+      setTransactions(txns);
+      setTags(tagMap);
+      setPlannedTxns(planned);
+      setBudgets(budgetRows);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   const today = todayIso();
   const horizonMonths = useMemo(() => nextMonths(3), []);
@@ -141,6 +163,39 @@ export default function Overview({ householdId }) {
     return transactions.filter(t => (tags[t.id] || []).includes('reimbursable_work') && !(tags[t.id] || []).includes('reimbursed'));
   }, [transactions, tags]);
 
+  const budgetByCategory = useMemo(() => {
+    const map = {};
+    budgets.forEach(b => { map[b.category] = b.monthly_limit; });
+    return map;
+  }, [budgets]);
+
+  function startEditBudget(cat, current) {
+    setEditingBudgetCat(cat);
+    setBudgetDraft(current != null ? String(current) : '');
+  }
+
+  async function saveBudgetFor(cat) {
+    const val = parseFloat(budgetDraft);
+    if (Number.isNaN(val) || val < 0) return;
+    try {
+      await setBudget(householdId, cat, val);
+      setEditingBudgetCat(null);
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function clearBudgetFor(cat) {
+    try {
+      await removeBudget(householdId, cat);
+      setEditingBudgetCat(null);
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   if (error) return <div style={{ color: '#9C4A34' }}>Couldn't load overview: {error}</div>;
   if (!accounts || !rules || !transactions) return <div style={{ color: '#6B7268' }}>Loading…</div>;
 
@@ -210,16 +265,39 @@ export default function Overview({ householdId }) {
         <div style={s.card}>
           <div style={s.label}>Spending by category · {monthLabel(thisMonthYm)}</div>
           {categorySpend.length === 0 && <div style={{ fontSize: 13, color: '#6B7268' }}>Nothing this month.</div>}
-          {categorySpend.map(([cat, amt]) => (
-            <div key={cat} style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-                <span>{cat}</span><span style={{ ...s.num, fontWeight: 600 }}>{fmtCAD(amt)}</span>
+          {categorySpend.map(([cat, amt]) => {
+            const budget = budgetByCategory[cat];
+            const overBudget = budget != null && amt > budget;
+            return (
+              <div key={cat} style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 3, gap: 6 }}>
+                  <span>{cat}</span>
+                  <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ ...s.num, fontWeight: 600, color: overBudget ? '#9C4A34' : '#1B211D' }}>
+                      {fmtCAD(amt)}{budget != null ? ` / ${fmtCAD(budget)}` : ''}
+                    </span>
+                    {editingBudgetCat !== cat && (
+                      <button style={{ background: 'none', border: 'none', color: '#6B7268', fontSize: 10.5, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => startEditBudget(cat, budget)}>
+                        {budget != null ? 'edit' : 'set budget'}
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {editingBudgetCat === cat ? (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                    <input style={{ ...s.field, width: 90 }} type="number" value={budgetDraft} onChange={e => setBudgetDraft(e.target.value)} autoFocus placeholder="$ limit" />
+                    <button style={{ background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }} onClick={() => saveBudgetFor(cat)}>Save</button>
+                    {budget != null && <button style={{ background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }} onClick={() => clearBudgetFor(cat)}>Remove</button>}
+                    <button style={{ background: 'none', border: 'none', color: '#6B7268', fontSize: 11, cursor: 'pointer' }} onClick={() => setEditingBudgetCat(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div style={{ height: 5, background: '#E3DECF', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min((amt / (budget || maxCategorySpend)) * 100, 100)}%`, background: overBudget ? '#9C4A34' : '#1F4D3D' }} />
+                  </div>
+                )}
               </div>
-              <div style={{ height: 5, background: '#E3DECF', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(amt / maxCategorySpend) * 100}%`, background: '#1F4D3D' }} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={s.card}>
           <div style={s.label}>Outstanding reimbursements</div>
