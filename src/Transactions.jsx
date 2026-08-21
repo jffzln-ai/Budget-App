@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {
   getAccounts, getAllTransactions, getTransactionTags,
   updateTransaction, addTransactionTag, removeTransactionTag,
+  getCustomCategories, addCustomCategory, getCategoryRules, setCategoryRule, removeCategoryRule, applyCategoryToMatching,
 } from './lib/queries.js';
 
 function fmtCAD(n) {
@@ -33,22 +34,33 @@ export default function Transactions({ householdId }) {
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
+  const [customCategories, setCustomCategories] = useState([]);
+  const [categoryRules, setCategoryRules] = useState([]);
   const [error, setError] = useState(null);
   const [q, setQ] = useState('');
   const [accountFilter, setAccountFilter] = useState('all');
   const [period, setPeriod] = useState('all');
   const [showTransfers, setShowTransfers] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [addingCategoryForId, setAddingCategoryForId] = useState(null);
+  const [newCategoryForm, setNewCategoryForm] = useState({ name: '', group: 'Other' });
+  const [pendingBulkApply, setPendingBulkApply] = useState(null);
+  const [showManageCategories, setShowManageCategories] = useState(false);
   const [editingDetailsId, setEditingDetailsId] = useState(null);
   const [detailsDraft, setDetailsDraft] = useState({ raw_description: '', date: '', amount: '' });
   const [busyId, setBusyId] = useState(null);
 
   async function load() {
     try {
-      const [accs, txns, tagMap] = await Promise.all([getAccounts(householdId), getAllTransactions(householdId), getTransactionTags(householdId)]);
+      const [accs, txns, tagMap, customCats, rules] = await Promise.all([
+        getAccounts(householdId), getAllTransactions(householdId), getTransactionTags(householdId),
+        getCustomCategories(householdId), getCategoryRules(householdId),
+      ]);
       setAccounts(accs);
       setTransactions(txns);
       setTags(tagMap);
+      setCustomCategories(customCats);
+      setCategoryRules(rules);
     } catch (err) {
       setError(err.message);
     }
@@ -64,15 +76,13 @@ export default function Transactions({ householdId }) {
 
   const knownCategories = useMemo(() => {
     if (!transactions) return [];
-    return Array.from(new Set(transactions.map(t => t.category))).sort();
-  }, [transactions]);
+    const fromTxns = transactions.map(t => t.category);
+    const fromCustom = customCategories.map(c => c.name);
+    return Array.from(new Set([...fromTxns, ...fromCustom])).sort();
+  }, [transactions, customCategories]);
 
   const today = todayIso();
 
-  // "This pay period" = since the most recent actual Payroll transaction on
-  // or before today. Derived from real transaction history rather than
-  // projecting from the recurring rule, since it's the same number either
-  // way but doesn't need a second fetch.
   const lastPaydayDate = useMemo(() => {
     if (!transactions) return null;
     const payrolls = transactions.filter(t => t.category === 'Payroll' && t.date <= today).sort((a, b) => b.date.localeCompare(a.date));
@@ -105,16 +115,61 @@ export default function Transactions({ householdId }) {
     return { income, expense, net: income - expense };
   }, [filtered]);
 
+  function checkForBulkApply(txn, category) {
+    const matches = transactions.filter(t => t.id !== txn.id && t.raw_description === txn.raw_description && t.category !== category && !t.is_transfer);
+    if (matches.length > 0) setPendingBulkApply({ pattern: txn.raw_description, category, count: matches.length });
+  }
+
   async function handleRecategorize(txn, category) {
     setEditingCategoryId(null);
     setBusyId(txn.id);
     try {
       await updateTransaction(txn.id, { category });
+      checkForBulkApply(txn, category);
       await load();
     } catch (err) {
       setError(err.message);
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function handleCreateAndApply(txn) {
+    const name = newCategoryForm.name.trim();
+    if (!name) return;
+    setBusyId(txn.id);
+    try {
+      await addCustomCategory(householdId, name, newCategoryForm.group || 'Other');
+      await updateTransaction(txn.id, { category: name });
+      setAddingCategoryForId(null);
+      setNewCategoryForm({ name: '', group: 'Other' });
+      checkForBulkApply(txn, name);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmBulkApply() {
+    if (!pendingBulkApply) return;
+    try {
+      await setCategoryRule(householdId, pendingBulkApply.pattern, pendingBulkApply.category);
+      await applyCategoryToMatching(householdId, pendingBulkApply.pattern, pendingBulkApply.category);
+      setPendingBulkApply(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleRemoveCategoryRule(pattern) {
+    try {
+      await removeCategoryRule(householdId, pattern);
+      await load();
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -172,17 +227,57 @@ export default function Transactions({ householdId }) {
           <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
           Show internal transfers
         </label>
+        <button style={s.smallBtn} onClick={() => setShowManageCategories(v => !v)}>Manage categories</button>
         <div style={{ fontSize: 12, color: '#6B7268', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
       </div>
+
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'baseline', background: '#FCFBF8' }}>
         <span style={{ fontSize: 12, color: '#6B7268' }}>In: <span style={{ ...s.num, color: '#1F4D3D', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
         <span style={{ fontSize: 12, color: '#6B7268' }}>Out: <span style={{ ...s.num, color: '#1B211D', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
         <span style={{ fontSize: 12, color: '#6B7268' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(totals.net)}</span></span>
       </div>
+
+      {showManageCategories && (
+        <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', background: '#FCFBF8' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Custom categories</div>
+          {customCategories.length === 0 && <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 10 }}>None yet - create one by recategorizing a transaction and choosing "+ New category".</div>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: categoryRules.length ? 16 : 0 }}>
+            {customCategories.map(c => (
+              <span key={c.name} style={{ fontSize: 12, background: '#fff', border: '1px solid #E3DECF', borderRadius: 4, padding: '3px 8px' }}>
+                {c.name} <span style={{ color: '#6B7268' }}>· {c.group_name}</span>
+              </span>
+            ))}
+          </div>
+          {categoryRules.length > 0 && (<>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Auto-apply rules</div>
+            {categoryRules.map(r => (
+              <div key={r.pattern} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0' }}>
+                <span>Transactions matching "{r.pattern}" → <strong>{r.category}</strong></span>
+                <button style={s.smallBtn} onClick={() => handleRemoveCategoryRule(r.pattern)}>Remove</button>
+              </div>
+            ))}
+          </>)}
+        </div>
+      )}
+
+      {pendingBulkApply && (
+        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: '#F1F5F1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 13 }}>
+            Also apply <strong>{pendingBulkApply.category}</strong> to <strong>{pendingBulkApply.count}</strong> other "{pendingBulkApply.pattern}" transaction{pendingBulkApply.count === 1 ? '' : 's'}?
+            <span style={{ color: '#6B7268', fontSize: 11.5 }}> — future imports matching this will apply automatically too.</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button style={s.primaryBtn} onClick={confirmBulkApply}>Apply to all {pendingBulkApply.count + 1}</button>
+            <button style={s.smallBtn} onClick={() => setPendingBulkApply(null)}>Just this one</button>
+          </div>
+        </div>
+      )}
+
       <div>
         {filtered.map(t => {
           const isReconciled = (tags[t.id] || []).includes('reconciled');
           const isEditingCat = editingCategoryId === t.id;
+          const isAddingNewCat = addingCategoryForId === t.id;
           const isEditingDetails = editingDetailsId === t.id;
           const busy = busyId === t.id;
           return (
@@ -205,7 +300,7 @@ export default function Transactions({ householdId }) {
                   <button style={s.smallBtn} onClick={() => setEditingDetailsId(null)}>Cancel</button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <button
                       onClick={() => !busy && toggleReconciled(t)}
@@ -216,10 +311,27 @@ export default function Transactions({ householdId }) {
                       <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 340 }}>{t.raw_description}</div>
                       <div style={{ fontSize: 11, color: '#6B7268', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span>{fmtDate(t.date)}</span><span>·</span><span>{accountsById[t.account_id]?.name}</span><span>·</span>
-                        {isEditingCat ? (
-                          <select style={{ ...s.field, fontSize: 11, padding: '1px 4px' }} value={t.category} autoFocus onChange={e => handleRecategorize(t, e.target.value)} onBlur={() => setEditingCategoryId(null)}>
-                            {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
+                        {isAddingNewCat ? (
+                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input style={{ ...s.field, fontSize: 11, padding: '1px 4px', width: 110 }} autoFocus value={newCategoryForm.name} onChange={e => setNewCategoryForm(f => ({ ...f, name: e.target.value }))} placeholder="category name" />
+                            <input style={{ ...s.field, fontSize: 11, padding: '1px 4px', width: 80 }} value={newCategoryForm.group} onChange={e => setNewCategoryForm(f => ({ ...f, group: e.target.value }))} placeholder="group" />
+                            <button style={s.primaryBtn} onClick={() => handleCreateAndApply(t)}>Add</button>
+                            <button style={s.smallBtn} onClick={() => setAddingCategoryForId(null)}>Cancel</button>
+                          </span>
+                        ) : isEditingCat ? (
+                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                            <select
+                              style={{ ...s.field, fontSize: 11, padding: '1px 4px' }} value={t.category} autoFocus
+                              onChange={e => {
+                                if (e.target.value === '__new__') { setEditingCategoryId(null); setAddingCategoryForId(t.id); }
+                                else handleRecategorize(t, e.target.value);
+                              }}
+                              onBlur={() => setEditingCategoryId(null)}
+                            >
+                              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                              <option value="__new__">+ New category…</option>
+                            </select>
+                          </span>
                         ) : (
                           <span
                             onClick={() => !t.is_transfer && setEditingCategoryId(t.id)}
