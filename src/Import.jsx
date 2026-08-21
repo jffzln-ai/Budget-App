@@ -1,214 +1,358 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
-  getAccounts, getExistingTransactionKeys, insertTransactions,
-  getUnmatchedTransferCandidates, applyTransferMatches,
-  getAllTransactions, getTransactionTags, getRecurringRules, insertRecurringRuleCandidates,
+  getAccounts, getAllTransactions, getTransactionTags,
+  updateTransaction, addTransactionTag, removeTransactionTag,
+  getCustomCategories, addCustomCategory, getCategoryRules, setCategoryRule, removeCategoryRule, applyCategoryToMatching,
 } from './lib/queries.js';
-import { detectCsvFormat, parseCsvRows } from './lib/csvParser.js';
-import { categorizeRaw } from './lib/categorize.js';
-import { matchTransfers, detectNewRecurring } from './lib/reconcile.js';
 
-function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, ' '); }
-
-function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+function fmtCAD(n) {
+  if (n === null || n === undefined) return '—';
+  const sign = n < 0 ? '−' : '+';
+  return sign + '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 const s = {
-  card: { background: '#F8F6F0', borderRadius: 8, padding: 20, maxWidth: 560 },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7268', marginBottom: 8 },
+  card: { background: '#F8F6F0', borderRadius: 8 },
   field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 4, fontSize: 13, background: '#fff' },
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
+  smallBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  primaryBtn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
 };
 
-export default function Import({ householdId }) {
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+function ymKey(date) { return date.slice(0, 7); }
+function monthLabel(ym) {
+  const [y, m] = ym.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+}
+
+export default function Transactions({ householdId }) {
   const [accounts, setAccounts] = useState(null);
-  const [accountId, setAccountId] = useState('');
-  const [pending, setPending] = useState(null); // { rows, skipped, formatMismatch, detected }
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
+  const [transactions, setTransactions] = useState(null);
+  const [tags, setTags] = useState({});
+  const [customCategories, setCustomCategories] = useState([]);
+  const [categoryRules, setCategoryRules] = useState([]);
+  const [error, setError] = useState(null);
+  const [q, setQ] = useState('');
+  const [accountFilter, setAccountFilter] = useState('all');
+  const [period, setPeriod] = useState('all');
+  const [showTransfers, setShowTransfers] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [addingCategoryForId, setAddingCategoryForId] = useState(null);
+  const [newCategoryForm, setNewCategoryForm] = useState({ name: '', group: 'Other' });
+  const [pendingBulkApply, setPendingBulkApply] = useState(null);
+  const [showManageCategories, setShowManageCategories] = useState(false);
+  const [editingDetailsId, setEditingDetailsId] = useState(null);
+  const [detailsDraft, setDetailsDraft] = useState({ raw_description: '', date: '', amount: '' });
+  const [busyId, setBusyId] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const accs = await getAccounts(householdId);
-        const importable = accs.filter(a => a.csv_format);
-        if (cancelled) return;
-        setAccounts(importable);
-        if (importable.length) setAccountId(importable[0].id);
-      } catch (err) {
-        setMsg({ tone: '#9C4A34', text: err.message });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [householdId]);
-
-  function handleFile(file) {
-    setMsg(null);
-    setPending(null);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const text = String(reader.result);
-      const detected = detectCsvFormat(text);
-      if (!detected) {
-        setMsg({ tone: '#9C4A34', text: "Couldn't recognize this as a TD export." });
-        return;
-      }
-      const rows = parseCsvRows(text, detected);
-      if (!rows.length) {
-        setMsg({ tone: '#9C4A34', text: 'No valid rows found in that file.' });
-        return;
-      }
-      try {
-        // Guess which account this belongs to: among accounts whose CSV format
-        // matches what we detected, score each by how many rows overlap with
-        // transactions already on file for it - a genuine statement (even a
-        // fresh download covering some already-imported dates) will overlap
-        // heavily with its own account and not at all with others.
-        const candidateAccounts = accounts.filter(a => a.csv_format === detected);
-        const allTxns = await getAllTransactions(householdId);
-        const rowKeySet = new Set(rows.map(r => {
-          const amount = round2((r.credit || 0) - (r.debit || 0));
-          return `${r.date}|${r.raw_description}|${amount}`;
-        }));
-        const scores = {};
-        candidateAccounts.forEach(a => { scores[a.id] = 0; });
-        allTxns.forEach(t => {
-          if (scores[t.account_id] === undefined) return;
-          if (rowKeySet.has(`${t.date}|${t.raw_description}|${t.amount}`)) scores[t.account_id] += 1;
-        });
-        let guessedId = null, guessedScore = 0;
-        Object.entries(scores).forEach(([id, score]) => { if (score > guessedScore) { guessedId = id; guessedScore = score; } });
-
-        let targetAccountId = accountId;
-        let guessNote = null;
-        if (guessedId && guessedScore >= 2) {
-          targetAccountId = guessedId;
-          setAccountId(guessedId);
-          const guessedName = accounts.find(a => a.id === guessedId).name;
-          guessNote = `Matched ${guessedScore} transactions already on file - guessed ${guessedName}. Change the dropdown if that's wrong.`;
-        }
-        const targetAccount = accounts.find(a => a.id === targetAccountId);
-        const formatMismatch = detected !== targetAccount.csv_format;
-
-        const existingKeys = await getExistingTransactionKeys(householdId, targetAccountId);
-        const toInsert = [];
-        let skipped = 0;
-        rows.forEach(r => {
-          const amount = round2((r.credit || 0) - (r.debit || 0));
-          const key = `${r.date}|${r.raw_description}|${amount}`;
-          if (existingKeys.has(key)) { skipped += 1; return; }
-          const cat = categorizeRaw(r.raw_description, amount, { type: targetAccount.type, name: targetAccount.name });
-          toInsert.push({
-            date: r.date, raw_description: r.raw_description, amount, running_balance: r.balance,
-            category: cat.category, is_transfer: cat.is_transfer, needs_review: cat.needs_review,
-            _tags: cat.tags,
-          });
-        });
-        setPending({ rows: toInsert, skipped, formatMismatch, detected, guessNote });
-      } catch (err) {
-        setMsg({ tone: '#9C4A34', text: err.message });
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  async function handleConfirm() {
-    setBusy(true);
+  async function load() {
     try {
-      await insertTransactions(householdId, accountId, pending.rows.map(({ _tags, ...r }) => r));
-      // Tags need transaction ids we don't have back from a bulk insert without
-      // .select() - deferred to the recategorize/tagging feature rather than
-      // adding that complexity to the first working version of import.
-
-      // Reconcile transfers: re-check everything still unmatched (not just
-      // what was just imported), since a new import can supply the missing
-      // half of a transfer that's been sitting unmatched for a while.
-      const unmatchedCandidates = await getUnmatchedTransferCandidates(householdId);
-      const transferMatches = matchTransfers(unmatchedCandidates);
-      if (transferMatches.length) await applyTransferMatches(transferMatches);
-
-      // Detect new recurring patterns: anything not already covered by an
-      // existing rule's match_keys, appearing 2+ times at a roughly fixed
-      // interval and amount.
-      const [allTxns, tagsById, existingRules] = await Promise.all([
-        getAllTransactions(householdId), getTransactionTags(householdId), getRecurringRules(householdId),
+      const [accs, txns, tagMap, customCats, rules] = await Promise.all([
+        getAccounts(householdId), getAllTransactions(householdId), getTransactionTags(householdId),
+        getCustomCategories(householdId), getCategoryRules(householdId),
       ]);
-      const existingKeys = new Set();
-      existingRules.forEach(r => (r.match_keys || []).forEach(mk => existingKeys.add(r.account_id + '::' + normalizeKey(mk))));
-      const newRuleCandidates = detectNewRecurring(allTxns, tagsById, existingKeys);
-      if (newRuleCandidates.length) await insertRecurringRuleCandidates(householdId, newRuleCandidates);
-
-      const parts = [`Added ${pending.rows.length} new transaction${pending.rows.length === 1 ? '' : 's'}`];
-      if (pending.skipped) parts.push(`${pending.skipped} already existed and were skipped`);
-      if (transferMatches.length) parts.push(`matched ${transferMatches.length / 2} transfer pair${transferMatches.length / 2 === 1 ? '' : 's'}`);
-      if (newRuleCandidates.length) parts.push(`found ${newRuleCandidates.length} new recurring pattern${newRuleCandidates.length === 1 ? '' : 's'} to review in Upcoming`);
-      setMsg({ tone: '#1F4D3D', text: parts.join(', ') + '.' });
-      setPending(null);
+      setAccounts(accs);
+      setTransactions(txns);
+      setTags(tagMap);
+      setCustomCategories(customCats);
+      setCategoryRules(rules);
     } catch (err) {
-      setMsg({ tone: '#9C4A34', text: err.message });
-    } finally {
-      setBusy(false);
+      setError(err.message);
     }
   }
 
-  if (!accounts) return <div style={{ color: '#6B7268' }}>Loading…</div>;
+  useEffect(() => { load(); }, [householdId]);
+
+  const accountsById = useMemo(() => {
+    const map = {};
+    (accounts || []).forEach(a => { map[a.id] = a; });
+    return map;
+  }, [accounts]);
+
+  const knownCategories = useMemo(() => {
+    if (!transactions) return [];
+    const fromTxns = transactions.map(t => t.category);
+    const fromCustom = customCategories.map(c => c.name);
+    return Array.from(new Set([...fromTxns, ...fromCustom])).sort();
+  }, [transactions, customCategories]);
+
+  const today = todayIso();
+
+  const lastPaydayDate = useMemo(() => {
+    if (!transactions) return null;
+    const payrolls = transactions.filter(t => t.category === 'Payroll' && t.date <= today).sort((a, b) => b.date.localeCompare(a.date));
+    return payrolls.length ? payrolls[0].date : null;
+  }, [transactions, today]);
+
+  const availableMonths = useMemo(() => {
+    if (!transactions) return [];
+    return Array.from(new Set(transactions.map(t => ymKey(t.date)))).sort().reverse();
+  }, [transactions]);
+
+  const filtered = useMemo(() => {
+    if (!transactions) return [];
+    return transactions
+      .filter(t => accountFilter === 'all' || t.account_id === accountFilter)
+      .filter(t => showTransfers || !t.is_transfer)
+      .filter(t => !q || t.raw_description.toLowerCase().includes(q.toLowerCase()))
+      .filter(t => {
+        if (period === 'all') return true;
+        if (period === 'pay_period') return lastPaydayDate && t.date >= lastPaydayDate;
+        return ymKey(t.date) === period;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  }, [transactions, accountFilter, showTransfers, q, period, lastPaydayDate]);
+
+  const totals = useMemo(() => {
+    const nonTransfer = filtered.filter(t => !t.is_transfer);
+    const income = nonTransfer.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+    const expense = Math.abs(nonTransfer.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+    return { income, expense, net: income - expense };
+  }, [filtered]);
+
+  function checkForBulkApply(txn, category) {
+    const matches = transactions.filter(t => t.id !== txn.id && t.raw_description === txn.raw_description && t.category !== category && !t.is_transfer);
+    if (matches.length > 0) setPendingBulkApply({ pattern: txn.raw_description, category, count: matches.length });
+  }
+
+  async function handleRecategorize(txn, category) {
+    setEditingCategoryId(null);
+    setBusyId(txn.id);
+    try {
+      await updateTransaction(txn.id, { category });
+      checkForBulkApply(txn, category);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleCreateAndApply(txn) {
+    const name = newCategoryForm.name.trim();
+    if (!name) return;
+    setBusyId(txn.id);
+    try {
+      await addCustomCategory(householdId, name, newCategoryForm.group || 'Other');
+      await updateTransaction(txn.id, { category: name });
+      setAddingCategoryForId(null);
+      setNewCategoryForm({ name: '', group: 'Other' });
+      checkForBulkApply(txn, name);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmBulkApply() {
+    if (!pendingBulkApply) return;
+    try {
+      await setCategoryRule(householdId, pendingBulkApply.pattern, pendingBulkApply.category);
+      await applyCategoryToMatching(householdId, pendingBulkApply.pattern, pendingBulkApply.category);
+      setPendingBulkApply(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleRemoveCategoryRule(pattern) {
+    try {
+      await removeCategoryRule(householdId, pattern);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function toggleReconciled(txn) {
+    const isReconciled = (tags[txn.id] || []).includes('reconciled');
+    setBusyId(txn.id);
+    try {
+      if (isReconciled) await removeTransactionTag(txn.id, 'reconciled');
+      else await addTransactionTag(txn.id, 'reconciled');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function startEditDetails(txn) {
+    setEditingDetailsId(txn.id);
+    setDetailsDraft({ raw_description: txn.raw_description, date: txn.date, amount: String(txn.amount) });
+  }
+
+  async function saveDetails(txn) {
+    const amt = parseFloat(detailsDraft.amount);
+    if (!detailsDraft.raw_description.trim() || !detailsDraft.date || Number.isNaN(amt)) return;
+    setBusyId(txn.id);
+    try {
+      await updateTransaction(txn.id, { raw_description: detailsDraft.raw_description.trim(), date: detailsDraft.date, amount: amt });
+      setEditingDetailsId(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (error) return <div style={{ color: '#9C4A34' }}>Couldn't load transactions: {error}</div>;
+  if (!transactions || !accounts) return <div style={{ color: '#6B7268' }}>Loading transactions…</div>;
 
   return (
     <div style={s.card}>
-      <div style={s.label}>Import a statement</div>
-      <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 14, lineHeight: 1.5 }}>
-        Pick which account this CSV is from, then upload the TD export. New transactions get categorized and checked against what's already in the database automatically.
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <select style={{ ...s.field, marginBottom: 10 }} value={accountId} onChange={e => { setAccountId(e.target.value); setPending(null); setMsg(null); }}>
+      <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input style={{ ...s.field, flex: '1 1 200px' }} placeholder="Search description…" value={q} onChange={e => setQ(e.target.value)} />
+        <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
+          <option value="all">All accounts</option>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <div
-          onClick={() => fileInputRef.current.click()}
-          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={e => {
-            e.preventDefault();
-            setDragOver(false);
-            const f = e.dataTransfer.files[0];
-            if (f) handleFile(f);
-          }}
-          style={{
-            border: `2px dashed ${dragOver ? '#1F4D3D' : '#E3DECF'}`, borderRadius: 6, padding: '24px 16px',
-            textAlign: 'center', cursor: 'pointer', background: dragOver ? '#EEF3EF' : '#fff', transition: 'all 0.15s',
-          }}
-        >
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B211D' }}>Drop a CSV here, or click to browse</div>
-          <div style={{ fontSize: 11.5, color: '#6B7268', marginTop: 4 }}>TD export for the account selected above</div>
-        </div>
-        <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }} />
+        <select style={s.field} value={period} onChange={e => setPeriod(e.target.value)}>
+          <option value="all">All time</option>
+          {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
+          {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+        </select>
+        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: '#6B7268' }}>
+          <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
+          Show internal transfers
+        </label>
+        <button style={s.smallBtn} onClick={() => setShowManageCategories(v => !v)}>Manage categories</button>
+        <div style={{ fontSize: 12, color: '#6B7268', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
       </div>
 
-      {msg && <div style={{ color: msg.tone, fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{msg.text}</div>}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'baseline', background: '#FCFBF8' }}>
+        <span style={{ fontSize: 12, color: '#6B7268' }}>In: <span style={{ ...s.num, color: '#1F4D3D', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        <span style={{ fontSize: 12, color: '#6B7268' }}>Out: <span style={{ ...s.num, color: '#1B211D', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        <span style={{ fontSize: 12, color: '#6B7268' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(totals.net)}</span></span>
+      </div>
 
-      {pending && (
-        <div style={{ border: '1px solid #E3DECF', borderRadius: 6, padding: 16, background: '#FCFBF8' }}>
-          {pending.guessNote && (
-            <div style={{ color: '#1F4D3D', fontSize: 12.5, marginBottom: 10 }}>{pending.guessNote}</div>
-          )}
-          {pending.formatMismatch && (
-            <div style={{ color: '#9C4A34', fontSize: 12.5, marginBottom: 10 }}>
-              This file looks like a {pending.detected === 'A' ? 'bank account' : 'credit card'} export, but you picked an account expecting the other format. Double check you picked the right account before confirming.
-            </div>
-          )}
-          <div style={{ fontSize: 13.5, marginBottom: 12 }}>
-            <strong>{pending.rows.length}</strong> new transaction{pending.rows.length === 1 ? '' : 's'} ready to add
-            {pending.skipped > 0 && <span style={{ color: '#6B7268' }}> ({pending.skipped} already in the system, skipped)</span>}
+      {showManageCategories && (
+        <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', background: '#FCFBF8' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Custom categories</div>
+          {customCategories.length === 0 && <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 10 }}>None yet - create one by recategorizing a transaction and choosing "+ New category".</div>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: categoryRules.length ? 16 : 0 }}>
+            {customCategories.map(c => (
+              <span key={c.name} style={{ fontSize: 12, background: '#fff', border: '1px solid #E3DECF', borderRadius: 4, padding: '3px 8px' }}>
+                {c.name} <span style={{ color: '#6B7268' }}>· {c.group_name}</span>
+              </span>
+            ))}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={s.btn} disabled={busy || pending.rows.length === 0} onClick={handleConfirm}>{busy ? 'Adding…' : 'Confirm import'}</button>
-            <button style={s.ghostBtn} onClick={() => setPending(null)}>Cancel</button>
+          {categoryRules.length > 0 && (<>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Auto-apply rules</div>
+            {categoryRules.map(r => (
+              <div key={r.pattern} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0' }}>
+                <span>Transactions matching "{r.pattern}" → <strong>{r.category}</strong></span>
+                <button style={s.smallBtn} onClick={() => handleRemoveCategoryRule(r.pattern)}>Remove</button>
+              </div>
+            ))}
+          </>)}
+        </div>
+      )}
+
+      {pendingBulkApply && (
+        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: '#F1F5F1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 13 }}>
+            Also apply <strong>{pendingBulkApply.category}</strong> to <strong>{pendingBulkApply.count}</strong> other "{pendingBulkApply.pattern}" transaction{pendingBulkApply.count === 1 ? '' : 's'}?
+            <span style={{ color: '#6B7268', fontSize: 11.5 }}> — future imports matching this will apply automatically too.</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button style={s.primaryBtn} onClick={confirmBulkApply}>Apply to all {pendingBulkApply.count + 1}</button>
+            <button style={s.smallBtn} onClick={() => setPendingBulkApply(null)}>Just this one</button>
           </div>
         </div>
       )}
+
+      <div>
+        {filtered.map(t => {
+          const isReconciled = (tags[t.id] || []).includes('reconciled');
+          const isEditingCat = editingCategoryId === t.id;
+          const isAddingNewCat = addingCategoryForId === t.id;
+          const isEditingDetails = editingDetailsId === t.id;
+          const busy = busyId === t.id;
+          return (
+            <div key={t.id} style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF' }}>
+              {isEditingDetails ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <div style={{ fontSize: 10, color: '#6B7268' }}>Description</div>
+                    <input style={{ ...s.field, width: '100%' }} value={detailsDraft.raw_description} onChange={e => setDetailsDraft(d => ({ ...d, raw_description: e.target.value }))} autoFocus />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#6B7268' }}>Date</div>
+                    <input style={s.field} type="date" value={detailsDraft.date} onChange={e => setDetailsDraft(d => ({ ...d, date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#6B7268' }}>Amount</div>
+                    <input style={{ ...s.field, width: 90 }} type="number" value={detailsDraft.amount} onChange={e => setDetailsDraft(d => ({ ...d, amount: e.target.value }))} />
+                  </div>
+                  <button style={s.primaryBtn} disabled={busy} onClick={() => saveDetails(t)}>{busy ? 'Saving…' : 'Save'}</button>
+                  <button style={s.smallBtn} onClick={() => setEditingDetailsId(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <button
+                      onClick={() => !busy && toggleReconciled(t)}
+                      title={isReconciled ? 'Reconciled - click to unmark' : 'Mark as reconciled'}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, fontSize: 16, color: isReconciled ? '#1F4D3D' : '#E3DECF' }}
+                    >●</button>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 340 }}>{t.raw_description}</div>
+                      <div style={{ fontSize: 11, color: '#6B7268', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span>{fmtDate(t.date)}</span><span>·</span><span>{accountsById[t.account_id]?.name}</span><span>·</span>
+                        {isAddingNewCat ? (
+                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input style={{ ...s.field, fontSize: 11, padding: '1px 4px', width: 110 }} autoFocus value={newCategoryForm.name} onChange={e => setNewCategoryForm(f => ({ ...f, name: e.target.value }))} placeholder="category name" />
+                            <input style={{ ...s.field, fontSize: 11, padding: '1px 4px', width: 80 }} value={newCategoryForm.group} onChange={e => setNewCategoryForm(f => ({ ...f, group: e.target.value }))} placeholder="group" />
+                            <button style={s.primaryBtn} onClick={() => handleCreateAndApply(t)}>Add</button>
+                            <button style={s.smallBtn} onClick={() => setAddingCategoryForId(null)}>Cancel</button>
+                          </span>
+                        ) : isEditingCat ? (
+                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                            <select
+                              style={{ ...s.field, fontSize: 11, padding: '1px 4px' }} value={t.category} autoFocus
+                              onChange={e => {
+                                if (e.target.value === '__new__') { setEditingCategoryId(null); setAddingCategoryForId(t.id); }
+                                else handleRecategorize(t, e.target.value);
+                              }}
+                              onBlur={() => setEditingCategoryId(null)}
+                            >
+                              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                              <option value="__new__">+ New category…</option>
+                            </select>
+                          </span>
+                        ) : (
+                          <span
+                            onClick={() => !t.is_transfer && setEditingCategoryId(t.id)}
+                            style={{ cursor: t.is_transfer ? 'default' : 'pointer', textDecoration: t.is_transfer ? 'none' : 'underline dotted', textDecorationColor: '#6B7268' }}
+                          >{t.category}</span>
+                        )}
+                        {t.needs_review && <span style={{ color: '#9C4A34' }}>· unmatched transfer</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: t.amount < 0 ? '#1B211D' : '#1F4D3D' }}>{fmtCAD(t.amount)}</span>
+                    <button style={s.smallBtn} onClick={() => startEditDetails(t)} title="Edit description, date, or amount">Edit</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div style={{ padding: 24, fontSize: 13, color: '#6B7268' }}>No transactions match.</div>}
+      </div>
     </div>
   );
 }
