@@ -113,7 +113,7 @@ function DashboardScreen({ session }) {
             <div style={{ fontSize: 12, color: 'rgba(248,246,240,0.55)', marginTop: 2 }}>{session.user.email}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <nav style={{ display: 'flex', gap: 16 }}>
+            <nav style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => {
                 const enabled = true;
                 return (
