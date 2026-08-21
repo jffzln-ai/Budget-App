@@ -204,6 +204,57 @@ export async function updatePlannedTransaction(id, fields) {
   if (error) throw error;
 }
 
+export async function getBudgets(householdId) {
+  const { data, error } = await supabase.from('budgets').select('*').eq('household_id', householdId);
+  if (error) throw error;
+  return data;
+}
+
+export async function setBudget(householdId, category, monthlyLimit) {
+  const { error } = await supabase.from('budgets').upsert({ household_id: householdId, category, monthly_limit: monthlyLimit });
+  if (error) throw error;
+}
+
+export async function removeBudget(householdId, category) {
+  const { error } = await supabase.from('budgets').delete().eq('household_id', householdId).eq('category', category);
+  if (error) throw error;
+}
+
+export async function getCustomCategories(householdId) {
+  const { data, error } = await supabase.from('custom_categories').select('*').eq('household_id', householdId).order('name');
+  if (error) throw error;
+  return data;
+}
+
+export async function addCustomCategory(householdId, name, groupName) {
+  const { error } = await supabase.from('custom_categories').insert({ household_id: householdId, name, group_name: groupName });
+  if (error) throw error;
+}
+
+export async function getCategoryRules(householdId) {
+  const { data, error } = await supabase.from('category_rules').select('*').eq('household_id', householdId);
+  if (error) throw error;
+  return data;
+}
+
+export async function setCategoryRule(householdId, pattern, category) {
+  const { error } = await supabase.from('category_rules').upsert({ household_id: householdId, pattern, category });
+  if (error) throw error;
+}
+
+export async function removeCategoryRule(householdId, pattern) {
+  const { error } = await supabase.from('category_rules').delete().eq('household_id', householdId).eq('pattern', pattern);
+  if (error) throw error;
+}
+
+// Applies a category to every transaction whose description matches the
+// given pattern - used for "apply to N similar transactions" after a
+// manual recategorize.
+export async function applyCategoryToMatching(householdId, pattern, category) {
+  const { error } = await supabase.from('transactions').update({ category }).eq('household_id', householdId).eq('raw_description', pattern);
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
