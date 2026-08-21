@@ -255,6 +255,14 @@ export async function applyCategoryToMatching(householdId, pattern, category) {
   if (error) throw error;
 }
 
+export async function linkTransfer(txnId1, txnId2) {
+  const gid = `manual_${txnId1}_${txnId2}`;
+  const { error: e1 } = await supabase.from('transactions').update({ transfer_group_id: gid, needs_review: false }).eq('id', txnId1);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from('transactions').update({ transfer_group_id: gid, needs_review: false }).eq('id', txnId2);
+  if (e2) throw e2;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
