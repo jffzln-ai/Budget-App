@@ -17,12 +17,14 @@ function fmtDate(iso) {
 }
 
 const s = {
-  card: { background: '#F8F6F0', borderRadius: 8 },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 4, fontSize: 13, background: '#fff' },
+  card: { background: '#FFFFFF', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  smallBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
-  primaryBtn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
+  smallBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  primaryBtn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
 };
+const PINE_SOFT = '#E3ECE6';
+const CREAM_TINT = '#FAF8F2';
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function ymKey(date) { return date.slice(0, 7); }
@@ -346,7 +348,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
         <div style={{ fontSize: 12, color: '#6B7268', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
       </div>
 
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'center', background: '#FCFBF8' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'center', background: CREAM_TINT }}>
         <label style={{ fontSize: 12, color: '#6B7268', display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={filtered.length > 0 && filtered.every(t => selectedIds.has(t.id))} onChange={toggleSelectAllVisible} />
           Select all
@@ -357,7 +359,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       </div>
 
       {selectedIds.size > 0 && (
-        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: '#EEF3EF', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: PINE_SOFT, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12.5, fontWeight: 600 }}>{selectedIds.size} selected</div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <select style={s.field} value={bulkCategoryChoice} onChange={e => setBulkCategoryChoice(e.target.value)}>
@@ -378,12 +380,12 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       )}
 
       {showManageCategories && (
-        <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', background: '#FCFBF8' }}>
+        <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', background: CREAM_TINT }}>
           <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Custom categories</div>
           {customCategories.length === 0 && <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 10 }}>None yet - create one by recategorizing a transaction and choosing "+ New category".</div>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: categoryRules.length ? 16 : 0 }}>
             {customCategories.map(c => (
-              <span key={c.name} style={{ fontSize: 12, background: '#fff', border: '1px solid #E3DECF', borderRadius: 4, padding: '3px 8px' }}>
+              <span key={c.name} style={{ fontSize: 12, background: '#fff', border: '1px solid #E3DECF', borderRadius: 8, padding: '3px 8px' }}>
                 {c.name} <span style={{ color: '#6B7268' }}>· {c.group_name}</span>
               </span>
             ))}
@@ -401,7 +403,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       )}
 
       {pendingBulkApply && (
-        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: '#F1F5F1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: PINE_SOFT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ fontSize: 13 }}>
             Also apply <strong>{pendingBulkApply.category}</strong> to <strong>{pendingBulkApply.count}</strong> other "{pendingBulkApply.pattern}" transaction{pendingBulkApply.count === 1 ? '' : 's'}?
             <span style={{ color: '#6B7268', fontSize: 11.5 }}> — future imports matching this will apply automatically too.</span>
@@ -504,7 +506,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
                 </div>
               )}
               {linkingId === t.id && (
-                <div style={{ marginTop: 8, padding: 10, background: '#FCFBF8', border: '1px solid #E3DECF', borderRadius: 4 }}>
+                <div style={{ marginTop: 8, padding: 10, background: CREAM_TINT, border: '1px solid #E3DECF', borderRadius: 12 }}>
                   <div style={{ fontSize: 11.5, color: '#6B7268', marginBottom: 6 }}>Link this to its matching transfer on another account:</div>
                   {candidatesFor(t).length === 0 && <div style={{ fontSize: 12, color: '#6B7268' }}>No other unmatched transfers to link to.</div>}
                   {candidatesFor(t).map(c => (

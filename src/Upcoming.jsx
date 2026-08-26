@@ -46,14 +46,14 @@ function countsTowardTotal(o) {
 }
 
 const s = {
-  card: { background: '#F8F6F0', borderRadius: 8 },
-  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid #E3DECF', gap: 12, flexWrap: 'wrap' },
+  card: { background: '#FFFFFF', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #F0ECE2', gap: 12, flexWrap: 'wrap' },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  badge: (color) => ({ fontSize: 11, fontWeight: 600, color, border: `1px solid ${color}`, borderRadius: 3, padding: '2px 6px', textTransform: 'uppercase' }),
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
-  dangerBtn: { background: 'none', border: '1px solid #9C4A34', borderRadius: 4, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#9C4A34' },
-  field: { padding: '6px 8px', border: '1px solid #E3DECF', borderRadius: 4, fontSize: 12.5, background: '#fff' },
+  badge: (color) => ({ fontSize: 11, fontWeight: 600, color, border: `1px solid ${color}`, borderRadius: 8, padding: '2px 7px', textTransform: 'uppercase' }),
+  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  dangerBtn: { background: 'none', border: '1px solid #9C4A34', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#9C4A34' },
+  field: { padding: '6px 8px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 12.5, background: '#fff' },
   segBtn: (active) => ({ padding: '5px 10px', fontSize: 12, fontWeight: 600, border: '1px solid #E3DECF', background: active ? '#1F4D3D' : '#fff', color: active ? '#F8F6F0' : '#1B211D', cursor: 'pointer' }),
 };
 
@@ -369,7 +369,7 @@ export default function Upcoming({ householdId }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
             {WEEKDAYS.map(w => <div key={w} style={{ fontSize: 10.5, fontWeight: 700, color: '#6B7268', textAlign: 'center', padding: '2px 0' }}>{w}</div>)}
             {buildCalendarCells(calendarMonth).map((date, i) => (
-              <div key={i} style={{ minHeight: 64, border: date ? '1px solid #E3DECF' : 'none', borderRadius: 4, padding: 4, background: date ? '#fff' : 'transparent' }}>
+              <div key={i} style={{ minHeight: 64, border: date ? '1px solid #E3DECF' : 'none', borderRadius: 10, padding: 4, background: date ? '#fff' : 'transparent' }}>
                 {date && (<>
                   <div style={{ fontSize: 10.5, color: '#6B7268', marginBottom: 2 }}>{Number(date.slice(8))}</div>
                   {(occByDate[date] || []).slice(0, 3).map(o => {

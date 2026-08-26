@@ -9,11 +9,11 @@ function fmtDateTime(iso) {
 }
 
 const s = {
-  card: { background: '#F8F6F0', borderRadius: 8, padding: 20, maxWidth: 560, marginTop: 20 },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7268', marginBottom: 8 },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 4, fontSize: 13, background: '#fff' },
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  card: { background: '#FFFFFF', borderRadius: 20, padding: 22, maxWidth: 560, marginTop: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#8A8477', marginBottom: 8 },
+  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
+  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
 };
 
 // OAuth institutions (most major banks) take the user completely off this
@@ -184,7 +184,7 @@ export default function PlaidConnect({ householdId }) {
       {linkToken && <LinkLauncher linkToken={linkToken} isOAuthResume={isOAuthResume} onExchanged={handleExchanged} onError={setError} />}
 
       {pendingMapping && (
-        <div style={{ marginTop: 16, padding: 14, background: '#FCFBF8', border: '1px solid #E3DECF', borderRadius: 4 }}>
+        <div style={{ marginTop: 16, padding: 14, background: '#FAF8F2', border: '1px solid #E3DECF', borderRadius: 14 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>
             {pendingMapping.institution_name} found {pendingMapping.accounts.length} account{pendingMapping.accounts.length === 1 ? '' : 's'} - match each to an existing account (keeps its history) or create a new one:
           </div>
