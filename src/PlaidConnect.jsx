@@ -16,21 +16,33 @@ const s = {
   ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
 };
 
+// OAuth institutions (most major banks) take the user completely off this
+// page to their bank's real login, then back. That's a full page
+// navigation, not a React transition - all component state is gone when
+// they return. The only way to resume Link afterward is to have stashed
+// the original token somewhere that survives a navigation, hence localStorage.
+const LINK_TOKEN_STORAGE_KEY = 'plaid_pending_link_token';
+
 // Fires Plaid Link the moment it's ready. Rendered only while a link_token
 // is pending, then unmounted - react-plaid-link tears down its own UI on
 // unmount, so this doubles as cleanup.
-function LinkLauncher({ linkToken, onExchanged, onError }) {
+function LinkLauncher({ linkToken, isOAuthResume, onExchanged, onError }) {
   const { open, ready } = usePlaidLink({
     token: linkToken,
+    receivedRedirectUri: isOAuthResume ? window.location.href : undefined,
     onSuccess: async (public_token) => {
       try {
+        localStorage.removeItem(LINK_TOKEN_STORAGE_KEY);
         const result = await exchangePublicToken(public_token);
         onExchanged(result);
       } catch (err) {
         onError(err.message);
       }
     },
-    onExit: (err) => { if (err) onError(err.display_message || err.error_message || 'Connection cancelled'); },
+    onExit: (err) => {
+      localStorage.removeItem(LINK_TOKEN_STORAGE_KEY);
+      if (err) onError(err.display_message || err.error_message || 'Connection cancelled');
+    },
   });
 
   useEffect(() => { if (ready) open(); }, [ready, open]);
@@ -41,6 +53,7 @@ export default function PlaidConnect({ householdId }) {
   const [connections, setConnections] = useState(null);
   const [ledgerAccounts, setLedgerAccounts] = useState([]);
   const [linkToken, setLinkToken] = useState(null);
+  const [isOAuthResume, setIsOAuthResume] = useState(false);
   const [pendingMapping, setPendingMapping] = useState(null); // { plaid_item_id, institution_name, accounts }
   const [mappingChoices, setMappingChoices] = useState({});
   const [error, setError] = useState(null);
@@ -57,13 +70,28 @@ export default function PlaidConnect({ householdId }) {
     }
   }
 
-  useEffect(() => { load(); }, [householdId]);
+  useEffect(() => {
+    load();
+    // Landing back here with ?oauth_state_id=... in the URL means we're
+    // returning from a bank's OAuth login - resume with the token stashed
+    // before the redirect, rather than starting a new Link session.
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('oauth_state_id')) {
+      const stored = localStorage.getItem(LINK_TOKEN_STORAGE_KEY);
+      if (stored) {
+        setLinkToken(stored);
+        setIsOAuthResume(true);
+      }
+    }
+  }, [householdId]);
 
   async function handleConnectBank() {
     setError(null);
     setBusy(true);
     try {
       const { link_token } = await createLinkToken();
+      localStorage.setItem(LINK_TOKEN_STORAGE_KEY, link_token);
+      setIsOAuthResume(false);
       setLinkToken(link_token);
     } catch (err) {
       setError(err.message);
@@ -74,6 +102,10 @@ export default function PlaidConnect({ householdId }) {
 
   function handleExchanged(result) {
     setLinkToken(null);
+    if (isOAuthResume) {
+      window.history.replaceState({}, '', window.location.pathname);
+      setIsOAuthResume(false);
+    }
     setPendingMapping(result);
     const initialChoices = {};
     result.accounts.forEach(a => { initialChoices[a.plaid_account_id] = { mode: 'new' }; });
@@ -124,6 +156,7 @@ export default function PlaidConnect({ householdId }) {
     }
   }
 
+  if (error && !connections) return <div style={{ color: '#9C4A34', marginTop: 20, fontSize: 13 }}>Couldn't load bank connections: {error}</div>;
   if (!connections) return <div style={{ color: '#6B7268', marginTop: 20 }}>Loading bank connections…</div>;
 
   return (
@@ -148,7 +181,7 @@ export default function PlaidConnect({ householdId }) {
       ))}
 
       <button style={{ ...s.btn, marginTop: 14 }} disabled={busy} onClick={handleConnectBank}>{busy ? 'Working…' : '+ Connect a bank'}</button>
-      {linkToken && <LinkLauncher linkToken={linkToken} onExchanged={handleExchanged} onError={setError} />}
+      {linkToken && <LinkLauncher linkToken={linkToken} isOAuthResume={isOAuthResume} onExchanged={handleExchanged} onError={setError} />}
 
       {pendingMapping && (
         <div style={{ marginTop: 16, padding: 14, background: '#FCFBF8', border: '1px solid #E3DECF', borderRadius: 4 }}>

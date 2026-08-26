@@ -11,6 +11,7 @@ export default async function handler(req, res) {
       products: ['transactions'],
       country_codes: ['CA', 'US'],
       language: 'en',
+      redirect_uri: process.env.APP_URL,
     });
     res.status(200).json({ link_token: response.data.link_token });
   } catch (err) {
