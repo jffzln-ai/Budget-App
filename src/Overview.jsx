@@ -200,7 +200,7 @@ export default function Overview({ householdId, onSelectAccount }) {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.1fr) 1fr 1fr', gap: 14, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 14 }}>
         <div style={s.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
             <div style={s.label}>{horizon === 'payday' ? 'Safe to spend' : 'Projected free cash'}</div>
