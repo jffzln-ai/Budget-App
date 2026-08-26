@@ -51,6 +51,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
   const [newCategoryForm, setNewCategoryForm] = useState({ name: '', group: 'Other' });
   const [pendingBulkApply, setPendingBulkApply] = useState(null);
   const [showManageCategories, setShowManageCategories] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingDetailsId, setEditingDetailsId] = useState(null);
   const [detailsDraft, setDetailsDraft] = useState({ raw_description: '', date: '', amount: '', account_id: '' });
   const [busyId, setBusyId] = useState(null);
@@ -319,33 +320,59 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     }
   }
 
+  const activeFilterCount = [accountFilter !== 'all', period !== 'all', showTransfers, unmatchedOnly].filter(Boolean).length;
+
   if (error) return <div style={{ color: 'var(--rust)' }}>Couldn't load transactions: {error}</div>;
   if (!transactions || !accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading transactions…</div>;
 
   return (
     <div style={s.card}>
-      <div style={{ padding: 16, borderBottom: '1px solid var(--line)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={{ ...s.field, flex: '1 1 200px' }} placeholder="Search description…" value={q} onChange={e => setQ(e.target.value)} />
-        <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
-          <option value="all">All accounts</option>
-          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <select style={s.field} value={period} onChange={e => setPeriod(e.target.value)}>
-          <option value="all">All time</option>
-          {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
-          {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
-        </select>
-        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
-          <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
-          Show internal transfers
-        </label>
-        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
-          <input type="checkbox" checked={unmatchedOnly} onChange={e => setUnmatchedOnly(e.target.checked)} />
-          Unmatched transfers only{unmatchedTransfers.length ? ` (${unmatchedTransfers.length})` : ''}
-        </label>
-        <button style={s.smallBtn} onClick={() => setShowManageCategories(v => !v)}>Manage categories</button>
-        <button style={s.smallBtn} onClick={exportCsv}>Export CSV</button>
-        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
+      <div style={{ padding: 16, borderBottom: '1px solid var(--line)' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <input style={{ ...s.field, flex: 1 }} placeholder="Search description…" value={q} onChange={e => setQ(e.target.value)} />
+          <button
+            onClick={() => setFiltersOpen(v => !v)}
+            style={{
+              ...s.smallBtn, display: 'flex', alignItems: 'center', gap: 6,
+              background: filtersOpen ? 'var(--cream-tint)' : 'none',
+            }}
+          >
+            Filters
+            {activeFilterCount > 0 && (
+              <span style={{ background: 'var(--pine)', color: 'var(--hero-text)', borderRadius: '50%', width: 16, height: 16, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {filtersOpen && (
+          <div style={{ marginTop: 12, padding: 14, background: 'var(--cream-tint)', borderRadius: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
+              <option value="all">All accounts</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <select style={s.field} value={period} onChange={e => setPeriod(e.target.value)}>
+              <option value="all">All time</option>
+              {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
+              {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+            </select>
+            <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
+              <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
+              Show internal transfers
+            </label>
+            <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
+              <input type="checkbox" checked={unmatchedOnly} onChange={e => setUnmatchedOnly(e.target.checked)} />
+              Unmatched transfers only{unmatchedTransfers.length ? ` (${unmatchedTransfers.length})` : ''}
+            </label>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
+          <button onClick={() => setShowManageCategories(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Manage categories</button>
+          <button onClick={exportCsv} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline', marginLeft: 'auto' }}>Export CSV</button>
+        </div>
       </div>
 
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 18, alignItems: 'center', background: CREAM_TINT }}>
