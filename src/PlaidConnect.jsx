@@ -9,11 +9,11 @@ function fmtDateTime(iso) {
 }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, padding: 22, maxWidth: 560, marginTop: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#8A8477', marginBottom: 8 },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  card: { background: 'var(--card)', borderRadius: 20, padding: 22, maxWidth: 560, marginTop: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
+  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
+  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
 };
 
 // OAuth institutions (most major banks) take the user completely off this
@@ -156,25 +156,25 @@ export default function PlaidConnect({ householdId }) {
     }
   }
 
-  if (error && !connections) return <div style={{ color: '#9C4A34', marginTop: 20, fontSize: 13 }}>Couldn't load bank connections: {error}</div>;
-  if (!connections) return <div style={{ color: '#6B7268', marginTop: 20 }}>Loading bank connections…</div>;
+  if (error && !connections) return <div style={{ color: 'var(--rust)', marginTop: 20, fontSize: 13 }}>Couldn't load bank connections: {error}</div>;
+  if (!connections) return <div style={{ color: 'var(--ink-soft)', marginTop: 20 }}>Loading bank connections…</div>;
 
   return (
     <div style={s.card}>
       <div style={s.label}>Connected banks</div>
-      {error && <div style={{ color: '#9C4A34', fontSize: 12.5, marginBottom: 10 }}>{error}</div>}
-      {syncMsg && <div style={{ color: '#1F4D3D', fontSize: 12.5, marginBottom: 10 }}>{syncMsg}</div>}
+      {error && <div style={{ color: 'var(--rust)', fontSize: 12.5, marginBottom: 10 }}>{error}</div>}
+      {syncMsg && <div style={{ color: 'var(--pine)', fontSize: 12.5, marginBottom: 10 }}>{syncMsg}</div>}
 
       {connections.length === 0 && (
-        <div style={{ fontSize: 13, color: '#6B7268', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 }}>
           No banks connected yet - CSV import above still works fine on its own, this is optional.
         </div>
       )}
       {connections.map(c => (
-        <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #E3DECF' }}>
+        <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{c.institution_name || 'Connected bank'}</div>
-            <div style={{ fontSize: 11, color: '#6B7268' }}>Last synced {fmtDateTime(c.last_synced_at)} · {c.status}</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Last synced {fmtDateTime(c.last_synced_at)} · {c.status}</div>
           </div>
           <button style={s.ghostBtn} disabled={busy} onClick={() => handleSync(c.id)}>{busy ? '…' : 'Sync now'}</button>
         </div>
@@ -184,7 +184,7 @@ export default function PlaidConnect({ householdId }) {
       {linkToken && <LinkLauncher linkToken={linkToken} isOAuthResume={isOAuthResume} onExchanged={handleExchanged} onError={setError} />}
 
       {pendingMapping && (
-        <div style={{ marginTop: 16, padding: 14, background: '#FAF8F2', border: '1px solid #E3DECF', borderRadius: 14 }}>
+        <div style={{ marginTop: 16, padding: 14, background: 'var(--cream-tint)', border: '1px solid var(--line)', borderRadius: 14 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>
             {pendingMapping.institution_name} found {pendingMapping.accounts.length} account{pendingMapping.accounts.length === 1 ? '' : 's'} - match each to an existing account (keeps its history) or create a new one:
           </div>

@@ -6,7 +6,7 @@ import {
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 
 const STATUS_LABEL = { active: 'Confirmed', needs_confirmation: 'Needs confirmation', pending_info: 'Waiting on you', dismissed: 'Dismissed' };
-const STATUS_COLOR = { active: '#1F4D3D', needs_confirmation: '#B8894A', pending_info: '#9C4A34', dismissed: '#6B7268' };
+const STATUS_COLOR = { active: 'var(--pine)', needs_confirmation: 'var(--gold)', pending_info: 'var(--rust)', dismissed: 'var(--ink-soft)' };
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function fmtCAD(n) {
@@ -46,15 +46,15 @@ function countsTowardTotal(o) {
 }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #F0ECE2', gap: 12, flexWrap: 'wrap' },
+  card: { background: 'var(--card)', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', gap: 12, flexWrap: 'wrap' },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
   badge: (color) => ({ fontSize: 11, fontWeight: 600, color, border: `1px solid ${color}`, borderRadius: 8, padding: '2px 7px', textTransform: 'uppercase' }),
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
-  dangerBtn: { background: 'none', border: '1px solid #9C4A34', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#9C4A34' },
-  field: { padding: '6px 8px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 12.5, background: '#fff' },
-  segBtn: (active) => ({ padding: '5px 10px', fontSize: 12, fontWeight: 600, border: '1px solid #E3DECF', background: active ? '#1F4D3D' : '#fff', color: active ? '#F8F6F0' : '#1B211D', cursor: 'pointer' }),
+  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
+  dangerBtn: { background: 'none', border: '1px solid var(--rust)', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--rust)' },
+  field: { padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 12.5, background: 'var(--card)' },
+  segBtn: (active) => ({ padding: '5px 10px', fontSize: 12, fontWeight: 600, border: '1px solid var(--line)', background: active ? 'var(--pine)' : 'var(--card)', color: active ? 'var(--hero-text)' : 'var(--ink)', cursor: 'pointer' }),
 };
 
 export default function Upcoming({ householdId }) {
@@ -242,8 +242,8 @@ export default function Upcoming({ householdId }) {
     }
   }
 
-  if (error) return <div style={{ color: '#9C4A34' }}>{error}</div>;
-  if (!rules || !accounts) return <div style={{ color: '#6B7268' }}>Loading upcoming…</div>;
+  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
+  if (!rules || !accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading upcoming…</div>;
 
   function renderOccurrence(o, moneyColor) {
     const isSkipped = (o.rule.skipped_dates || []).includes(o.date);
@@ -251,17 +251,17 @@ export default function Upcoming({ householdId }) {
 
     if (o.rule.planned && editingPlannedId === o.rule.id) {
       return (
-        <div key={o.occId} style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div key={o.occId} style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 10, color: '#6B7268' }}>Description</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Description</div>
             <input style={{ ...s.field, width: '100%' }} value={plannedDraft.description} onChange={e => setPlannedDraft(d => ({ ...d, description: e.target.value }))} autoFocus />
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#6B7268' }}>Date</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Date</div>
             <input style={s.field} type="date" value={plannedDraft.date} onChange={e => setPlannedDraft(d => ({ ...d, date: e.target.value }))} />
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#6B7268' }}>Amount</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Amount</div>
             <input style={{ ...s.field, width: 90 }} type="number" value={plannedDraft.amount} onChange={e => setPlannedDraft(d => ({ ...d, amount: e.target.value }))} />
           </div>
           <button style={s.btn} disabled={busy} onClick={() => savePlannedEdit(o.rule.id)}>{busy ? 'Saving…' : 'Save'}</button>
@@ -275,7 +275,7 @@ export default function Upcoming({ householdId }) {
       <div key={o.occId} style={{ ...s.row, opacity: isSkipped ? 0.55 : 1 }}>
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 500, textDecoration: isSkipped ? 'line-through' : 'none' }}>{o.rule.label}</div>
-          <div style={{ fontSize: 11, color: '#6B7268' }}>{fmtDate(o.date)} · {o.rule.planned ? 'one-off' : o.rule.cadence}{isSkipped ? ' · skipped' : ''}</div>
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(o.date)} · {o.rule.planned ? 'one-off' : o.rule.cadence}{isSkipped ? ' · skipped' : ''}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {editingAmountId === o.rule.id ? (
@@ -285,7 +285,7 @@ export default function Upcoming({ householdId }) {
               <button style={s.ghostBtn} onClick={() => setEditingAmountId(null)}>Cancel</button>
             </>
           ) : (
-            <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: isSkipped ? '#6B7268' : income ? '#1F4D3D' : moneyColor }}>
+            <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: isSkipped ? 'var(--ink-soft)' : income ? 'var(--pine)' : moneyColor }}>
               {income ? '+' : ''}{fmtCAD(o.rule.expected_amount)}
             </span>
           )}
@@ -322,18 +322,18 @@ export default function Upcoming({ householdId }) {
       </div>
 
       {nextPayrollDate && (
-        <div style={{ ...s.card, padding: '14px 20px', marginBottom: 14, background: '#1F4D3D', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ ...s.card, padding: '14px 20px', marginBottom: 14, background: 'var(--pine)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontSize: 12, color: 'rgba(248,246,240,0.8)' }}>Due on Infinity before next payday ({fmtDate(nextPayrollDate)})</div>
-          <div style={{ ...s.num, fontSize: 20, fontWeight: 600, color: '#F8F6F0' }}>{fmtCAD(dueBeforePayday)}</div>
+          <div style={{ ...s.num, fontSize: 20, fontWeight: 600, color: 'var(--hero-text)' }}>{fmtCAD(dueBeforePayday)}</div>
         </div>
       )}
 
       {unscheduled.length > 0 && (
-        <div style={{ ...s.card, padding: 16, marginBottom: 14, border: '1px solid #9C4A34' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7268', marginBottom: 8 }}>Waiting on you</div>
+        <div style={{ ...s.card, padding: 16, marginBottom: 14, border: '1px solid var(--rust)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>Waiting on you</div>
           {unscheduled.map(r => (
             <div key={r.id} style={{ fontSize: 13, padding: '4px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{r.label} — <span style={{ color: '#6B7268', fontSize: 11.5 }}>{r.note}</span></span>
+              <span>{r.label} — <span style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>{r.note}</span></span>
               <button style={s.dangerBtn} onClick={() => handleDismissRule(r)}>Delete</button>
             </div>
           ))}
@@ -347,15 +347,15 @@ export default function Upcoming({ householdId }) {
           const net = income - expense;
           return (
             <div key={ym} style={{ ...s.card, marginBottom: 14 }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 600 }}>{monthLabel(ym)}</div>
                 <div style={{ fontSize: 12, display: 'flex', gap: 12 }}>
-                  <span style={{ color: '#6B7268' }}>In: <span style={{ ...s.num, color: '#1F4D3D', fontWeight: 600 }}>{fmtCAD(income)}</span></span>
-                  <span style={{ color: '#6B7268' }}>Out: <span style={{ ...s.num, color: '#1B211D', fontWeight: 600 }}>{fmtCAD(expense)}</span></span>
-                  <span style={{ color: '#6B7268' }}>Net: <span style={{ ...s.num, color: net < 0 ? '#9C4A34' : '#1F4D3D', fontWeight: 700 }}>{fmtCAD(net)}{net < 0 ? ' short' : ''}</span></span>
+                  <span style={{ color: 'var(--ink-soft)' }}>In: <span style={{ ...s.num, color: 'var(--pine)', fontWeight: 600 }}>{fmtCAD(income)}</span></span>
+                  <span style={{ color: 'var(--ink-soft)' }}>Out: <span style={{ ...s.num, color: 'var(--ink)', fontWeight: 600 }}>{fmtCAD(expense)}</span></span>
+                  <span style={{ color: 'var(--ink-soft)' }}>Net: <span style={{ ...s.num, color: net < 0 ? 'var(--rust)' : 'var(--pine)', fontWeight: 700 }}>{fmtCAD(net)}{net < 0 ? ' short' : ''}</span></span>
                 </div>
               </div>
-              {occs.map(o => renderOccurrence(o, '#1B211D'))}
+              {occs.map(o => renderOccurrence(o, 'var(--ink)'))}
             </div>
           );
         })
@@ -367,23 +367,23 @@ export default function Upcoming({ householdId }) {
             <button style={s.ghostBtn} onClick={() => setCalendarMonth(m => shiftMonth(m, 1))}>Next →</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-            {WEEKDAYS.map(w => <div key={w} style={{ fontSize: 10.5, fontWeight: 700, color: '#6B7268', textAlign: 'center', padding: '2px 0' }}>{w}</div>)}
+            {WEEKDAYS.map(w => <div key={w} style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--ink-soft)', textAlign: 'center', padding: '2px 0' }}>{w}</div>)}
             {buildCalendarCells(calendarMonth).map((date, i) => (
-              <div key={i} style={{ minHeight: 64, border: date ? '1px solid #E3DECF' : 'none', borderRadius: 10, padding: 4, background: date ? '#fff' : 'transparent' }}>
+              <div key={i} style={{ minHeight: 64, border: date ? '1px solid var(--line)' : 'none', borderRadius: 10, padding: 4, background: date ? 'var(--card)' : 'transparent' }}>
                 {date && (<>
-                  <div style={{ fontSize: 10.5, color: '#6B7268', marginBottom: 2 }}>{Number(date.slice(8))}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 2 }}>{Number(date.slice(8))}</div>
                   {(occByDate[date] || []).slice(0, 3).map(o => {
                     const isSkipped = (o.rule.skipped_dates || []).includes(o.date);
                     const income = isIncome(o.rule);
                     return (
                       <div key={o.occId} title={`${o.rule.label} ${fmtCAD(o.rule.expected_amount)}`} style={{
                         fontSize: 9.5, padding: '1px 3px', marginBottom: 1, borderRadius: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                        background: isSkipped ? '#E3DECF' : income ? '#1F4D3D' : '#EEF3EF', color: isSkipped ? '#6B7268' : income ? '#F8F6F0' : '#1B211D',
+                        background: isSkipped ? 'var(--line)' : income ? 'var(--pine)' : 'var(--pine-soft)', color: isSkipped ? 'var(--ink-soft)' : income ? 'var(--hero-text)' : 'var(--ink)',
                         textDecoration: isSkipped ? 'line-through' : 'none',
                       }}>{o.rule.label}</div>
                     );
                   })}
-                  {(occByDate[date] || []).length > 3 && <div style={{ fontSize: 9, color: '#6B7268' }}>+{occByDate[date].length - 3} more</div>}
+                  {(occByDate[date] || []).length > 3 && <div style={{ fontSize: 9, color: 'var(--ink-soft)' }}>+{occByDate[date].length - 3} more</div>}
                 </>)}
               </div>
             ))}
@@ -392,29 +392,29 @@ export default function Upcoming({ householdId }) {
       )}
 
       <div style={{ ...s.card, padding: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7268', marginBottom: 10 }}>Add a one-off planned expense</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>Add a one-off planned expense</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 10.5, color: '#6B7268', marginBottom: 3 }}>Description</div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Description</div>
             <input style={{ ...s.field, width: '100%' }} value={plannedForm.description} onChange={e => setPlannedForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. New tires" />
           </div>
           <div>
-            <div style={{ fontSize: 10.5, color: '#6B7268', marginBottom: 3 }}>Account</div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Account</div>
             <select style={s.field} value={plannedForm.account_id} onChange={e => setPlannedForm(f => ({ ...f, account_id: e.target.value }))}>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <div style={{ fontSize: 10.5, color: '#6B7268', marginBottom: 3 }}>Date</div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Date</div>
             <input style={s.field} type="date" value={plannedForm.date} onChange={e => setPlannedForm(f => ({ ...f, date: e.target.value }))} />
           </div>
           <div>
-            <div style={{ fontSize: 10.5, color: '#6B7268', marginBottom: 3 }}>Amount</div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Amount</div>
             <input style={{ ...s.field, width: 90 }} type="number" value={plannedForm.amount} onChange={e => setPlannedForm(f => ({ ...f, amount: e.target.value }))} placeholder="-$ or +$" />
           </div>
           <button style={s.btn} disabled={savingPlanned} onClick={handleAddPlanned}>{savingPlanned ? 'Saving…' : 'Add'}</button>
         </div>
-        <div style={{ fontSize: 10.5, color: '#6B7268', marginTop: 8 }}>Use a negative amount for an expense, positive for expected income.</div>
+        <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 8 }}>Use a negative amount for an expense, positive for expected income.</div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getAccounts, getNetWorthItems, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
+import { getAccounts, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 import { ProgressRing } from './lib/icons.jsx';
 
@@ -31,19 +31,17 @@ function nextMonths(n) {
 }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#8A8477', marginBottom: 6 },
+  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 6 },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  field: { padding: '6px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 12, background: '#fff' },
+  field: { padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 12, background: 'var(--card)' },
 };
-const GOLD = '#B8894A';
-const RUST = '#9C4A34';
-const PINE = '#1F4D3D';
-const PINE_SOFT = '#E3ECE6';
+const RUST = 'var(--rust)';
+const PINE = 'var(--pine)';
+const PINE_SOFT = 'var(--pine-soft)';
 
-export default function Overview({ householdId, onSelectAccount, onManageNetWorth }) {
+export default function Overview({ householdId, onSelectAccount }) {
   const [accounts, setAccounts] = useState(null);
-  const [netWorthItems, setNetWorthItems] = useState([]);
   const [rules, setRules] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
@@ -51,7 +49,6 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
   const [budgets, setBudgets] = useState([]);
   const [error, setError] = useState(null);
   const [horizon, setHorizon] = useState('payday');
-  const [netWorthCollapsed, setNetWorthCollapsed] = useState(false);
   const [editingBudgetCat, setEditingBudgetCat] = useState(null);
   const [budgetDraft, setBudgetDraft] = useState('');
 
@@ -59,13 +56,12 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
     let cancelled = false;
     (async () => {
       try {
-        const [accs, items, r, txns, tagMap, planned, budgetRows] = await Promise.all([
-          getAccounts(householdId), getNetWorthItems(householdId), getRecurringRules(householdId),
+        const [accs, r, txns, tagMap, planned, budgetRows] = await Promise.all([
+          getAccounts(householdId), getRecurringRules(householdId),
           getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
         ]);
         if (cancelled) return;
         setAccounts(accs);
-        setNetWorthItems(items);
         setRules(r);
         setTransactions(txns);
         setTags(tagMap);
@@ -80,12 +76,11 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
 
   async function reload() {
     try {
-      const [accs, items, r, txns, tagMap, planned, budgetRows] = await Promise.all([
-        getAccounts(householdId), getNetWorthItems(householdId), getRecurringRules(householdId),
+      const [accs, r, txns, tagMap, planned, budgetRows] = await Promise.all([
+        getAccounts(householdId), getRecurringRules(householdId),
         getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
       ]);
       setAccounts(accs);
-      setNetWorthItems(items);
       setRules(r);
       setTransactions(txns);
       setTags(tagMap);
@@ -163,11 +158,6 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
   }, [transactions, tags, thisMonthYm]);
   const maxCategorySpend = categorySpend.length ? categorySpend[0][1] : 1;
 
-  const outstandingReimbursements = useMemo(() => {
-    if (!transactions) return [];
-    return transactions.filter(t => (tags[t.id] || []).includes('reimbursable_work') && !(tags[t.id] || []).includes('reimbursed'));
-  }, [transactions, tags]);
-
   const budgetByCategory = useMemo(() => {
     const map = {};
     budgets.forEach(b => { map[b.category] = b.monthly_limit; });
@@ -201,12 +191,8 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
     }
   }
 
-  if (error) return <div style={{ color: '#9C4A34' }}>Couldn't load overview: {error}</div>;
-  if (!accounts || !rules || !transactions) return <div style={{ color: '#6B7268' }}>Loading…</div>;
-
-  const accountsNetWorth = accounts.reduce((sum, a) => sum + (balances[a.id] || 0), 0);
-  const manualNetWorth = netWorthItems.reduce((sum, i) => sum + (i.type === 'liability' ? -i.value : i.value), 0);
-  const netWorth = accountsNetWorth + manualNetWorth;
+  if (error) return <div style={{ color: 'var(--rust)' }}>Couldn't load overview: {error}</div>;
+  if (!accounts || !rules || !transactions) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
 
   const heroValue = horizon === 'payday' ? safeToSpend : projectedFreeCash;
   const heroMax = horizon === 'payday' ? cashOnHand : (cashOnHand + incomeThroughHorizon);
@@ -214,32 +200,6 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
 
   return (
     <div>
-      <div style={{ ...s.card, marginBottom: 14 }}>
-        {netWorthCollapsed ? (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setNetWorthCollapsed(false)}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <div style={s.label}>Net worth</div>
-              <span style={{ ...s.num, fontSize: 18, fontWeight: 700, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</span>
-            </div>
-            <span style={{ color: '#8A8477', fontSize: 12 }}>▾</span>
-          </div>
-        ) : (<>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setNetWorthCollapsed(true)}>
-              <div style={s.label}>Net worth</div>
-              <span style={{ color: '#8A8477', fontSize: 11, marginTop: -6 }}>▴</span>
-            </div>
-            {onManageNetWorth && (
-              <button onClick={onManageNetWorth} style={{ background: 'none', border: 'none', color: '#8A8477', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
-                Manage →
-              </button>
-            )}
-          </div>
-          <div style={{ ...s.num, fontSize: 34, fontWeight: 700, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</div>
-          <div style={{ fontSize: 11.5, color: '#8A8477', marginTop: 4 }}>all accounts{netWorthItems.length ? ` + ${netWorthItems.length} other item${netWorthItems.length === 1 ? '' : 's'}` : ''}</div>
-        </>)}
-      </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.1fr) 1fr 1fr', gap: 14, marginBottom: 14 }}>
         <div style={s.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
@@ -256,24 +216,24 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
               </div>
             </ProgressRing>
             <div>
-              <div style={{ fontSize: 11.5, color: '#6B7268', lineHeight: 1.5 }}>
-                out of <span style={{ ...s.num, fontWeight: 600, color: '#1B211D' }}>{fmtCAD(heroMax)}</span>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                out of <span style={{ ...s.num, fontWeight: 600, color: 'var(--ink)' }}>{fmtCAD(heroMax)}</span>
               </div>
-              <div style={{ fontSize: 11.5, color: '#6B7268', marginTop: 6 }}>
-                Committed: <span style={{ ...s.num, fontWeight: 600, color: '#1B211D' }}>{fmtCAD(committedThroughHorizon)}</span>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
+                Committed: <span style={{ ...s.num, fontWeight: 600, color: 'var(--ink)' }}>{fmtCAD(committedThroughHorizon)}</span>
               </div>
             </div>
           </div>
         </div>
         <div style={s.card}>
           <div style={s.label}>Days to payday</div>
-          <div style={{ ...s.num, fontSize: 32, fontWeight: 700, color: '#1B211D', marginTop: 4 }}>{daysToPayday ?? '—'}</div>
-          <div style={{ fontSize: 11.5, color: '#6B7268', marginTop: 4 }}>{nextPayrollDate ? `next payday ${fmtDate(nextPayrollDate)}` : 'no payroll rule found'}</div>
+          <div style={{ ...s.num, fontSize: 32, fontWeight: 700, color: 'var(--ink)', marginTop: 4 }}>{daysToPayday ?? '—'}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>{nextPayrollDate ? `next payday ${fmtDate(nextPayrollDate)}` : 'no payroll rule found'}</div>
         </div>
         <div style={s.card}>
           <div style={s.label}>Cash on hand</div>
           <div style={{ ...s.num, fontSize: 32, fontWeight: 700, color: cashOnHand < 100 ? RUST : PINE, marginTop: 4 }}>{fmtCAD(cashOnHand)}</div>
-          <div style={{ fontSize: 11.5, color: '#6B7268', marginTop: 4 }}>Infinity</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Infinity</div>
         </div>
       </div>
 
@@ -286,15 +246,14 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
             title={onSelectAccount ? `View ${a.name}'s transactions` : undefined}
           >
             <div style={s.label}>{a.name}</div>
-            <div style={{ ...s.num, fontSize: 21, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : '#1B211D' }}>{fmtCAD(balances[a.id])}</div>
+            <div style={{ ...s.num, fontSize: 21, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div style={s.card}>
-          <div style={s.label}>Spending by category · {monthLabel(thisMonthYm)}</div>
-          {categorySpend.length === 0 && <div style={{ fontSize: 13, color: '#6B7268', marginTop: 8 }}>Nothing this month.</div>}
+      <div style={s.card}>
+        <div style={s.label}>Spending by category · {monthLabel(thisMonthYm)}</div>
+          {categorySpend.length === 0 && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>Nothing this month.</div>}
           {categorySpend.map(([cat, amt]) => {
             const budget = budgetByCategory[cat];
             const overBudget = budget != null && amt > budget;
@@ -303,11 +262,11 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 4, gap: 6 }}>
                   <span style={{ fontWeight: 500 }}>{cat}</span>
                   <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ ...s.num, fontWeight: 700, color: overBudget ? RUST : '#1B211D' }}>
+                    <span style={{ ...s.num, fontWeight: 700, color: overBudget ? RUST : 'var(--ink)' }}>
                       {fmtCAD(amt)}{budget != null ? ` / ${fmtCAD(budget)}` : ''}
                     </span>
                     {editingBudgetCat !== cat && (
-                      <button style={{ background: 'none', border: 'none', color: '#8A8477', fontSize: 10.5, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => startEditBudget(cat, budget)}>
+                      <button style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 10.5, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => startEditBudget(cat, budget)}>
                         {budget != null ? 'edit' : 'set budget'}
                       </button>
                     )}
@@ -316,9 +275,9 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
                 {editingBudgetCat === cat ? (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
                     <input style={{ ...s.field, width: 90 }} type="number" value={budgetDraft} onChange={e => setBudgetDraft(e.target.value)} autoFocus placeholder="$ limit" />
-                    <button style={{ background: PINE, color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }} onClick={() => saveBudgetFor(cat)}>Save</button>
-                    {budget != null && <button style={{ background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }} onClick={() => clearBudgetFor(cat)}>Remove</button>}
-                    <button style={{ background: 'none', border: 'none', color: '#6B7268', fontSize: 11, cursor: 'pointer' }} onClick={() => setEditingBudgetCat(null)}>Cancel</button>
+                    <button style={{ background: PINE, color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }} onClick={() => saveBudgetFor(cat)}>Save</button>
+                    {budget != null && <button style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }} onClick={() => clearBudgetFor(cat)}>Remove</button>}
+                    <button style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 11, cursor: 'pointer' }} onClick={() => setEditingBudgetCat(null)}>Cancel</button>
                   </div>
                 ) : (
                   <div style={{ height: 7, background: PINE_SOFT, borderRadius: 6, overflow: 'hidden' }}>
@@ -329,22 +288,6 @@ export default function Overview({ householdId, onSelectAccount, onManageNetWort
             );
           })}
         </div>
-        <div style={s.card}>
-          <div style={s.label}>Outstanding reimbursements</div>
-          {outstandingReimbursements.length === 0 && <div style={{ fontSize: 13, color: '#6B7268', marginTop: 8 }}>Nothing outstanding.</div>}
-          {outstandingReimbursements.map(t => (
-            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid #F0ECE2', fontSize: 12.5 }}>
-              <span>{t.raw_description}</span>
-              <span style={{ ...s.num, color: GOLD, fontWeight: 700 }}>{fmtCAD(Math.abs(t.amount))}</span>
-            </div>
-          ))}
-          {outstandingReimbursements.length > 0 && (
-            <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 700, textAlign: 'right' }}>
-              Total owed to you: <span style={s.num}>{fmtCAD(outstandingReimbursements.reduce((sum, t) => sum + Math.abs(t.amount), 0))}</span>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

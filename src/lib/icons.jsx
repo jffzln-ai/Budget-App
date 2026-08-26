@@ -2,7 +2,7 @@ import React from 'react';
 
 // Circular progress ring - value/max drawn as an arc. Used for the hero
 // "available out of X" style stats, matching the reference direction.
-export function ProgressRing({ value, max, size = 140, strokeWidth = 12, color = '#1F4D3D', trackColor = '#E3DECF', children }) {
+export function ProgressRing({ value, max, size = 140, strokeWidth = 12, color = 'var(--pine)', trackColor = 'var(--pine-soft)', children }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = max > 0 ? Math.max(0, Math.min(value / max, 1)) : 0;
@@ -79,6 +79,15 @@ export function IconTrendingUp({ color = 'currentColor' }) {
     <svg {...iconProps} stroke={color}>
       <path d="M3 17l6-6 4 4 8-8" />
       <path d="M15 7h6v6" />
+    </svg>
+  );
+}
+
+export function IconReceipt({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" />
+      <path d="M9 8h6M9 12h6" />
     </svg>
   );
 }

@@ -12,14 +12,14 @@ function fmtCAD(n) {
 }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#8A8477', marginBottom: 8 },
+  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' },
+  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
+  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' },
 };
-const PINE = '#1F4D3D';
-const RUST = '#9C4A34';
+const PINE = 'var(--pine)';
+const RUST = 'var(--rust)';
 
 export default function NetWorth({ householdId }) {
   const [accounts, setAccounts] = useState(null);
@@ -64,8 +64,8 @@ export default function NetWorth({ householdId }) {
     }
   }
 
-  if (error) return <div style={{ color: '#9C4A34' }}>{error}</div>;
-  if (!accounts) return <div style={{ color: '#6B7268' }}>Loading…</div>;
+  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
+  if (!accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
 
   const balances = computeLiveBalances(accounts);
   const accountAssetsTotal = accounts.reduce((sum, a) => sum + Math.max(balances[a.id] || 0, 0), 0);
@@ -83,11 +83,11 @@ export default function NetWorth({ householdId }) {
         <div style={{ ...s.num, fontSize: 38, fontWeight: 700, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</div>
         <div style={{ display: 'flex', gap: 28, marginTop: 16 }}>
           <div>
-            <div style={{ fontSize: 11, color: '#8A8477', fontWeight: 600 }}>Total assets</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>Total assets</div>
             <div style={{ ...s.num, fontSize: 19, fontWeight: 700, color: PINE, marginTop: 2 }}>{fmtCAD(totalAssets)}</div>
           </div>
           <div>
-            <div style={{ fontSize: 11, color: '#8A8477', fontWeight: 600 }}>Total liabilities</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>Total liabilities</div>
             <div style={{ ...s.num, fontSize: 19, fontWeight: 700, color: RUST, marginTop: 2 }}>{fmtCAD(totalLiabilities)}</div>
           </div>
         </div>
@@ -96,42 +96,42 @@ export default function NetWorth({ householdId }) {
       <div style={{ ...s.card, marginBottom: 14 }}>
         <div style={s.label}>Accounts</div>
         {accounts.map(a => (
-          <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid #F0ECE2', fontSize: 13 }}>
+          <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--line-soft)', fontSize: 13 }}>
             <span>{a.name}</span>
-            <span style={{ ...s.num, fontWeight: 600, color: (balances[a.id] || 0) < 0 ? RUST : '#1B211D' }}>{fmtCAD(balances[a.id])}</span>
+            <span style={{ ...s.num, fontWeight: 600, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
           </div>
         ))}
       </div>
 
       <div style={s.card}>
         <div style={s.label}>Other assets & liabilities</div>
-        {netWorthItems.length === 0 && <div style={{ fontSize: 13, color: '#6B7268', marginBottom: 12 }}>Nothing added yet - real estate, vehicles, external RRSPs, loans, anything not already one of your tracked accounts.</div>}
+        {netWorthItems.length === 0 && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 }}>Nothing added yet - real estate, vehicles, external RRSPs, loans, anything not already one of your tracked accounts.</div>}
         {netWorthItems.map(item => (
-          <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #F0ECE2' }}>
+          <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line-soft)' }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</div>
-              <div style={{ fontSize: 11, color: '#8A8477' }}>{item.category}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{item.category}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ ...s.num, fontWeight: 700, color: item.type === 'liability' ? RUST : PINE }}>{item.type === 'liability' ? '−' : ''}{fmtCAD(item.value)}</span>
-              <button onClick={() => handleRemove(item.id)} style={{ background: 'none', border: 'none', color: '#8A8477', cursor: 'pointer', fontSize: 12 }}>Remove</button>
+              <button onClick={() => handleRemove(item.id)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 12 }}>Remove</button>
             </div>
           </div>
         ))}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 14 }}>
-          <div><div style={{ fontSize: 11, color: '#8A8477', marginBottom: 3 }}>Name</div><input style={s.field} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Honda Civic" /></div>
-          <div><div style={{ fontSize: 11, color: '#8A8477', marginBottom: 3 }}>Type</div>
+          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Name</div><input style={s.field} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Honda Civic" /></div>
+          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Type</div>
             <select style={s.field} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, category: NET_WORTH_CATEGORIES[e.target.value][0] }))}>
               <option value="asset">Asset</option>
               <option value="liability">Liability</option>
             </select>
           </div>
-          <div><div style={{ fontSize: 11, color: '#8A8477', marginBottom: 3 }}>Category</div>
+          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Category</div>
             <select style={s.field} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
               {NET_WORTH_CATEGORIES[form.type].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div><div style={{ fontSize: 11, color: '#8A8477', marginBottom: 3 }}>Value</div><input style={{ ...s.field, width: 100 }} type="number" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="$" /></div>
+          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Value</div><input style={{ ...s.field, width: 100 }} type="number" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="$" /></div>
           <button style={s.btn} disabled={saving} onClick={handleAdd}>{saving ? 'Saving…' : 'Add'}</button>
         </div>
       </div>

@@ -17,14 +17,14 @@ function fmtDate(iso) {
 }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
+  card: { background: 'var(--card)', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  smallBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
-  primaryBtn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
+  smallBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
+  primaryBtn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
 };
-const PINE_SOFT = '#E3ECE6';
-const CREAM_TINT = '#FAF8F2';
+const PINE_SOFT = 'var(--pine-soft)';
+const CREAM_TINT = 'var(--cream-tint)';
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function ymKey(date) { return date.slice(0, 7); }
@@ -319,12 +319,12 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     }
   }
 
-  if (error) return <div style={{ color: '#9C4A34' }}>Couldn't load transactions: {error}</div>;
-  if (!transactions || !accounts) return <div style={{ color: '#6B7268' }}>Loading transactions…</div>;
+  if (error) return <div style={{ color: 'var(--rust)' }}>Couldn't load transactions: {error}</div>;
+  if (!transactions || !accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading transactions…</div>;
 
   return (
     <div style={s.card}>
-      <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ padding: 16, borderBottom: '1px solid var(--line)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input style={{ ...s.field, flex: '1 1 200px' }} placeholder="Search description…" value={q} onChange={e => setQ(e.target.value)} />
         <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
           <option value="all">All accounts</option>
@@ -335,31 +335,31 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
           {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
           {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
         </select>
-        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: '#6B7268' }}>
+        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
           <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
           Show internal transfers
         </label>
-        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: '#6B7268' }}>
+        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
           <input type="checkbox" checked={unmatchedOnly} onChange={e => setUnmatchedOnly(e.target.checked)} />
           Unmatched transfers only{unmatchedTransfers.length ? ` (${unmatchedTransfers.length})` : ''}
         </label>
         <button style={s.smallBtn} onClick={() => setShowManageCategories(v => !v)}>Manage categories</button>
         <button style={s.smallBtn} onClick={exportCsv}>Export CSV</button>
-        <div style={{ fontSize: 12, color: '#6B7268', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
       </div>
 
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'center', background: CREAM_TINT }}>
-        <label style={{ fontSize: 12, color: '#6B7268', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 18, alignItems: 'center', background: CREAM_TINT }}>
+        <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={filtered.length > 0 && filtered.every(t => selectedIds.has(t.id))} onChange={toggleSelectAllVisible} />
           Select all
         </label>
-        <span style={{ fontSize: 12, color: '#6B7268' }}>In: <span style={{ ...s.num, color: '#1F4D3D', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-        <span style={{ fontSize: 12, color: '#6B7268' }}>Out: <span style={{ ...s.num, color: '#1B211D', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-        <span style={{ fontSize: 12, color: '#6B7268' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(totals.net)}</span></span>
+        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>In: <span style={{ ...s.num, color: 'var(--pine)', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Out: <span style={{ ...s.num, color: 'var(--ink)', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? 'var(--rust)' : 'var(--pine)' }}>{fmtCAD(totals.net)}</span></span>
       </div>
 
       {selectedIds.size > 0 && (
-        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: PINE_SOFT, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ padding: 14, borderBottom: '1px solid var(--line)', background: PINE_SOFT, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12.5, fontWeight: 600 }}>{selectedIds.size} selected</div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <select style={s.field} value={bulkCategoryChoice} onChange={e => setBulkCategoryChoice(e.target.value)}>
@@ -380,13 +380,13 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       )}
 
       {showManageCategories && (
-        <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', background: CREAM_TINT }}>
+        <div style={{ padding: 16, borderBottom: '1px solid var(--line)', background: CREAM_TINT }}>
           <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Custom categories</div>
-          {customCategories.length === 0 && <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 10 }}>None yet - create one by recategorizing a transaction and choosing "+ New category".</div>}
+          {customCategories.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>None yet - create one by recategorizing a transaction and choosing "+ New category".</div>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: categoryRules.length ? 16 : 0 }}>
             {customCategories.map(c => (
-              <span key={c.name} style={{ fontSize: 12, background: '#fff', border: '1px solid #E3DECF', borderRadius: 8, padding: '3px 8px' }}>
-                {c.name} <span style={{ color: '#6B7268' }}>· {c.group_name}</span>
+              <span key={c.name} style={{ fontSize: 12, background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 8, padding: '3px 8px' }}>
+                {c.name} <span style={{ color: 'var(--ink-soft)' }}>· {c.group_name}</span>
               </span>
             ))}
           </div>
@@ -403,10 +403,10 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       )}
 
       {pendingBulkApply && (
-        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: PINE_SOFT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ padding: 14, borderBottom: '1px solid var(--line)', background: PINE_SOFT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ fontSize: 13 }}>
             Also apply <strong>{pendingBulkApply.category}</strong> to <strong>{pendingBulkApply.count}</strong> other "{pendingBulkApply.pattern}" transaction{pendingBulkApply.count === 1 ? '' : 's'}?
-            <span style={{ color: '#6B7268', fontSize: 11.5 }}> — future imports matching this will apply automatically too.</span>
+            <span style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}> — future imports matching this will apply automatically too.</span>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button style={s.primaryBtn} onClick={confirmBulkApply}>Apply to all {pendingBulkApply.count + 1}</button>
@@ -423,23 +423,23 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
           const isEditingDetails = editingDetailsId === t.id;
           const busy = busyId === t.id;
           return (
-            <div key={t.id} style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF' }}>
+            <div key={t.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
               {isEditingDetails ? (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 160 }}>
-                    <div style={{ fontSize: 10, color: '#6B7268' }}>Description</div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Description</div>
                     <input style={{ ...s.field, width: '100%' }} value={detailsDraft.raw_description} onChange={e => setDetailsDraft(d => ({ ...d, raw_description: e.target.value }))} autoFocus />
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: '#6B7268' }}>Date</div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Date</div>
                     <input style={s.field} type="date" value={detailsDraft.date} onChange={e => setDetailsDraft(d => ({ ...d, date: e.target.value }))} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: '#6B7268' }}>Amount</div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Amount</div>
                     <input style={{ ...s.field, width: 90 }} type="number" value={detailsDraft.amount} onChange={e => setDetailsDraft(d => ({ ...d, amount: e.target.value }))} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: '#6B7268' }}>Account</div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Account</div>
                     <select style={s.field} value={detailsDraft.account_id} onChange={e => setDetailsDraft(d => ({ ...d, account_id: e.target.value }))}>
                       {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
@@ -459,11 +459,11 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
                     <button
                       onClick={() => !busy && toggleReconciled(t)}
                       title={isReconciled ? 'Reconciled - click to unmark' : 'Mark as reconciled'}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, fontSize: 16, color: isReconciled ? '#1F4D3D' : '#E3DECF' }}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, fontSize: 16, color: isReconciled ? 'var(--pine)' : 'var(--line)' }}
                     >●</button>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 340 }}>{t.raw_description}</div>
-                      <div style={{ fontSize: 11, color: '#6B7268', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span>{fmtDate(t.date)}</span><span>·</span><span>{accountsById[t.account_id]?.name}</span><span>·</span>
                         {isAddingNewCat ? (
                           <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -489,15 +489,15 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
                         ) : (
                           <span
                             onClick={() => !t.is_transfer && setEditingCategoryId(t.id)}
-                            style={{ cursor: t.is_transfer ? 'default' : 'pointer', textDecoration: t.is_transfer ? 'none' : 'underline dotted', textDecorationColor: '#6B7268' }}
+                            style={{ cursor: t.is_transfer ? 'default' : 'pointer', textDecoration: t.is_transfer ? 'none' : 'underline dotted', textDecorationColor: 'var(--ink-soft)' }}
                           >{t.category}</span>
                         )}
-                        {t.needs_review && <span style={{ color: '#9C4A34' }}>· unmatched transfer</span>}
+                        {t.needs_review && <span style={{ color: 'var(--rust)' }}>· unmatched transfer</span>}
                       </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                    <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: t.amount < 0 ? '#1B211D' : '#1F4D3D' }}>{fmtCAD(t.amount)}</span>
+                    <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{fmtCAD(t.amount)}</span>
                     {t.is_transfer && t.needs_review && (
                       <button style={s.smallBtn} onClick={() => setLinkingId(linkingId === t.id ? null : t.id)}>{linkingId === t.id ? 'Cancel' : 'Link…'}</button>
                     )}
@@ -506,9 +506,9 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
                 </div>
               )}
               {linkingId === t.id && (
-                <div style={{ marginTop: 8, padding: 10, background: CREAM_TINT, border: '1px solid #E3DECF', borderRadius: 12 }}>
-                  <div style={{ fontSize: 11.5, color: '#6B7268', marginBottom: 6 }}>Link this to its matching transfer on another account:</div>
-                  {candidatesFor(t).length === 0 && <div style={{ fontSize: 12, color: '#6B7268' }}>No other unmatched transfers to link to.</div>}
+                <div style={{ marginTop: 8, padding: 10, background: CREAM_TINT, border: '1px solid var(--line)', borderRadius: 12 }}>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 6 }}>Link this to its matching transfer on another account:</div>
+                  {candidatesFor(t).length === 0 && <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>No other unmatched transfers to link to.</div>}
                   {candidatesFor(t).map(c => (
                     <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 12 }}>
                       <span>{accountsById[c.account_id]?.name} · {fmtDate(c.date)} · {c.raw_description} · <span style={s.num}>{fmtCAD(c.amount)}</span></span>
@@ -520,7 +520,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
             </div>
           );
         })}
-        {filtered.length === 0 && <div style={{ padding: 24, fontSize: 13, color: '#6B7268' }}>No transactions match.</div>}
+        {filtered.length === 0 && <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>No transactions match.</div>}
       </div>
     </div>
   );

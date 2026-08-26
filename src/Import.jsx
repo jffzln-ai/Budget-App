@@ -15,11 +15,11 @@ function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, '
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, padding: 22, maxWidth: 560, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#8A8477', marginBottom: 8 },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
-  btn: { background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid #E3DECF', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1B211D' },
+  card: { background: 'var(--card)', borderRadius: 20, padding: 22, maxWidth: 560, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
+  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
+  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
 };
 
 export default function Import({ householdId }) {
@@ -41,7 +41,7 @@ export default function Import({ householdId }) {
         setAccounts(importable);
         if (importable.length) setAccountId(importable[0].id);
       } catch (err) {
-        setMsg({ tone: '#9C4A34', text: err.message });
+        setMsg({ tone: 'var(--rust)', text: err.message });
       }
     })();
     return () => { cancelled = true; };
@@ -55,12 +55,12 @@ export default function Import({ householdId }) {
       const text = String(reader.result);
       const detected = detectCsvFormat(text);
       if (!detected) {
-        setMsg({ tone: '#9C4A34', text: "Couldn't recognize this as a TD export." });
+        setMsg({ tone: 'var(--rust)', text: "Couldn't recognize this as a TD export." });
         return;
       }
       const rows = parseCsvRows(text, detected);
       if (!rows.length) {
-        setMsg({ tone: '#9C4A34', text: 'No valid rows found in that file.' });
+        setMsg({ tone: 'var(--rust)', text: 'No valid rows found in that file.' });
         return;
       }
       try {
@@ -118,7 +118,7 @@ export default function Import({ householdId }) {
         });
         setPending({ rows: toInsert, skipped, formatMismatch, detected, guessNote });
       } catch (err) {
-        setMsg({ tone: '#9C4A34', text: err.message });
+        setMsg({ tone: 'var(--rust)', text: err.message });
       }
     };
     reader.readAsText(file);
@@ -154,21 +154,21 @@ export default function Import({ householdId }) {
       if (pending.skipped) parts.push(`${pending.skipped} already existed and were skipped`);
       if (transferMatches.length) parts.push(`matched ${transferMatches.length / 2} transfer pair${transferMatches.length / 2 === 1 ? '' : 's'}`);
       if (newRuleCandidates.length) parts.push(`found ${newRuleCandidates.length} new recurring pattern${newRuleCandidates.length === 1 ? '' : 's'} to review in Upcoming`);
-      setMsg({ tone: '#1F4D3D', text: parts.join(', ') + '.' });
+      setMsg({ tone: 'var(--pine)', text: parts.join(', ') + '.' });
       setPending(null);
     } catch (err) {
-      setMsg({ tone: '#9C4A34', text: err.message });
+      setMsg({ tone: 'var(--rust)', text: err.message });
     } finally {
       setBusy(false);
     }
   }
 
-  if (!accounts) return <div style={{ color: '#6B7268' }}>Loading…</div>;
+  if (!accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
 
   return (
     <div style={s.card}>
       <div style={s.label}>Import a statement</div>
-      <div style={{ fontSize: 12.5, color: '#6B7268', marginBottom: 14, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 }}>
         Pick which account this CSV is from, then upload the TD export. New transactions get categorized and checked against what's already in the database automatically.
       </div>
       <div style={{ marginBottom: 14 }}>
@@ -186,12 +186,12 @@ export default function Import({ householdId }) {
             if (f) handleFile(f);
           }}
           style={{
-            border: `2px dashed ${dragOver ? '#1F4D3D' : '#E3DECF'}`, borderRadius: 14, padding: '24px 16px',
-            textAlign: 'center', cursor: 'pointer', background: dragOver ? '#EEF3EF' : '#fff', transition: 'all 0.15s',
+            border: `2px dashed ${dragOver ? 'var(--pine)' : 'var(--line)'}`, borderRadius: 14, padding: '24px 16px',
+            textAlign: 'center', cursor: 'pointer', background: dragOver ? 'var(--pine-soft)' : 'var(--card)', transition: 'all 0.15s',
           }}
         >
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B211D' }}>Drop a CSV here, or click to browse</div>
-          <div style={{ fontSize: 11.5, color: '#6B7268', marginTop: 4 }}>TD export for the account selected above</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Drop a CSV here, or click to browse</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>TD export for the account selected above</div>
         </div>
         <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }} />
       </div>
@@ -199,18 +199,18 @@ export default function Import({ householdId }) {
       {msg && <div style={{ color: msg.tone, fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{msg.text}</div>}
 
       {pending && (
-        <div style={{ border: '1px solid #E3DECF', borderRadius: 14, padding: 16, background: '#FAF8F2' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: 14, padding: 16, background: 'var(--cream-tint)' }}>
           {pending.guessNote && (
-            <div style={{ color: '#1F4D3D', fontSize: 12.5, marginBottom: 10 }}>{pending.guessNote}</div>
+            <div style={{ color: 'var(--pine)', fontSize: 12.5, marginBottom: 10 }}>{pending.guessNote}</div>
           )}
           {pending.formatMismatch && (
-            <div style={{ color: '#9C4A34', fontSize: 12.5, marginBottom: 10 }}>
+            <div style={{ color: 'var(--rust)', fontSize: 12.5, marginBottom: 10 }}>
               This file looks like a {pending.detected === 'A' ? 'bank account' : 'credit card'} export, but you picked an account expecting the other format. Double check you picked the right account before confirming.
             </div>
           )}
           <div style={{ fontSize: 13.5, marginBottom: 12 }}>
             <strong>{pending.rows.length}</strong> new transaction{pending.rows.length === 1 ? '' : 's'} ready to add
-            {pending.skipped > 0 && <span style={{ color: '#6B7268' }}> ({pending.skipped} already in the system, skipped)</span>}
+            {pending.skipped > 0 && <span style={{ color: 'var(--ink-soft)' }}> ({pending.skipped} already in the system, skipped)</span>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button style={s.btn} disabled={busy || pending.rows.length === 0} onClick={handleConfirm}>{busy ? 'Adding…' : 'Confirm import'}</button>

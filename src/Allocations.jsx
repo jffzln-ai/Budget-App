@@ -7,10 +7,10 @@ function fmtCAD(n) {
 }
 
 const s = {
-  card: { background: '#FFFFFF', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#8A8477', marginBottom: 8 },
+  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
   num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  field: { padding: '7px 10px', border: '1px solid #E3DECF', borderRadius: 8, fontSize: 13, background: '#fff' },
+  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
 };
 
 function ymKey(date) { return date.slice(0, 7); }
@@ -37,8 +37,8 @@ export default function Allocations({ householdId }) {
 
   useEffect(() => { load(); }, [householdId]);
 
-  if (error) return <div style={{ color: '#9C4A34' }}>{error}</div>;
-  if (!accounts || !transactions) return <div style={{ color: '#6B7268' }}>Loading…</div>;
+  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
+  if (!accounts || !transactions) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
 
   const savingsAccounts = accounts.filter(a => a.type === 'savings');
   const tfsa = accounts.find(a => a.type === 'investment');
@@ -67,17 +67,17 @@ export default function Allocations({ householdId }) {
           return (
             <div key={a.id} style={s.card}>
               <div style={s.label}>{a.name}{a.purpose === 'rental' ? ' · Rental' : ''}</div>
-              <div style={{ ...s.num, fontSize: 24, fontWeight: 700, color: '#1F4D3D' }}>{fmtCAD(balance)}</div>
-              {month !== 'all' && <div style={{ fontSize: 10.5, color: '#8A8477', marginTop: 2 }}>current balance · activity below is {monthLabel(month)} only</div>}
-              <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 12, color: '#6B7268' }}>
-                <span>In: <span style={{ ...s.num, color: '#1F4D3D' }}>{fmtCAD(inflow)}</span></span>
-                <span>Out: <span style={{ ...s.num, color: '#9C4A34' }}>{fmtCAD(outflow)}</span></span>
+              <div style={{ ...s.num, fontSize: 24, fontWeight: 700, color: 'var(--pine)' }}>{fmtCAD(balance)}</div>
+              {month !== 'all' && <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 2 }}>current balance · activity below is {monthLabel(month)} only</div>}
+              <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 12, color: 'var(--ink-soft)' }}>
+                <span>In: <span style={{ ...s.num, color: 'var(--pine)' }}>{fmtCAD(inflow)}</span></span>
+                <span>Out: <span style={{ ...s.num, color: 'var(--rust)' }}>{fmtCAD(outflow)}</span></span>
               </div>
               <div style={{ marginTop: 10 }}>
                 {accTxns.slice(0, month === 'all' ? 4 : 12).map(t => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, padding: '4px 0', borderTop: '1px solid #F0ECE2' }}>
-                    <span style={{ color: '#6B7268', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{t.raw_description}</span>
-                    <span style={{ ...s.num, fontWeight: 600, color: t.amount < 0 ? '#1B211D' : '#1F4D3D' }}>{t.amount < 0 ? '−' : '+'}{fmtCAD(t.amount)}</span>
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, padding: '4px 0', borderTop: '1px solid var(--line-soft)' }}>
+                    <span style={{ color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{t.raw_description}</span>
+                    <span style={{ ...s.num, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{t.amount < 0 ? '−' : '+'}{fmtCAD(t.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -87,8 +87,8 @@ export default function Allocations({ householdId }) {
         {tfsa && (
           <div style={s.card}>
             <div style={s.label}>{tfsa.name}</div>
-            <div style={{ ...s.num, fontSize: 24, fontWeight: 700, color: '#1F4D3D' }}>{fmtCAD(tfsa.current_balance)}</div>
-            <div style={{ fontSize: 11.5, color: '#8A8477', marginTop: 8, lineHeight: 1.5 }}>Holdings snapshot only.</div>
+            <div style={{ ...s.num, fontSize: 24, fontWeight: 700, color: 'var(--pine)' }}>{fmtCAD(tfsa.current_balance)}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8, lineHeight: 1.5 }}>Holdings snapshot only.</div>
           </div>
         )}
       </div>
