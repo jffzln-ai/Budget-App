@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient.js';
 import { getHousehold } from './lib/queries.js';
 import Overview from './Overview.jsx';
@@ -6,6 +6,7 @@ import Transactions from './Transactions.jsx';
 import Upcoming from './Upcoming.jsx';
 import Allocations from './Allocations.jsx';
 import Import from './Import.jsx';
+import { IconHome, IconList, IconClock, IconMore, IconLayers, IconUpload } from './lib/icons.jsx';
 
 const styles = {
   page: {
@@ -86,11 +87,23 @@ function AuthScreen() {
   );
 }
 
+const CORE_TABS = [
+  { key: 'overview', label: 'Overview', Icon: IconHome },
+  { key: 'transactions', label: 'Transactions', Icon: IconList },
+  { key: 'upcoming', label: 'Upcoming', Icon: IconClock },
+];
+const MENU_TABS = [
+  { key: 'allocations', label: 'Allocations', Icon: IconLayers },
+  { key: 'import', label: 'Import', Icon: IconUpload },
+];
+
 function DashboardScreen({ session }) {
   const [household, setHousehold] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [tab, setTab] = useState('overview');
   const [pendingAccountFilter, setPendingAccountFilter] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   function goToAccountTransactions(accountId) {
     setPendingAccountFilter(accountId);
@@ -110,45 +123,96 @@ function DashboardScreen({ session }) {
     return () => { cancelled = true; };
   }, [session.user.id]);
 
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const activeMenuTab = MENU_TABS.find(t => t.key === tab);
+
   return (
-    <div style={{ minHeight: '100vh', background: '#16201C', fontFamily: "'Inter', sans-serif", padding: '28px 16px 60px' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 22, flexWrap: 'wrap', gap: 10 }}>
-          <div>
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 600, color: '#F8F6F0' }}>Ledger</div>
-            <div style={{ fontSize: 12, color: 'rgba(248,246,240,0.55)', marginTop: 2 }}>{session.user.email}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <nav style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              {['overview', 'transactions', 'upcoming', 'allocations', 'import'].map(t => {
-                const enabled = true;
-                return (
+    <div style={{ minHeight: '100vh', background: '#F4F1EA', fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px 100px' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600, color: '#1B211D' }}>Ledger</div>
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              style={{
+                width: 38, height: 38, borderRadius: '50%', border: '1px solid #E3DECF', background: '#FFFFFF',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            ><IconMore color="#1B211D" /></button>
+            {menuOpen && (
+              <div style={{
+                position: 'absolute', right: 0, top: 46, background: '#FFFFFF', borderRadius: 14,
+                boxShadow: '0 8px 28px rgba(27,33,29,0.14)', minWidth: 200, overflow: 'hidden', zIndex: 20,
+              }}>
+                {MENU_TABS.map(({ key, label, Icon }) => (
                   <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    disabled={!enabled}
+                    key={key}
+                    onClick={() => { setTab(key); setMenuOpen(false); }}
                     style={{
-                      background: 'none', border: 'none', padding: '4px 0', fontSize: 13, fontWeight: 600,
-                      textTransform: 'capitalize', cursor: enabled ? 'pointer' : 'default',
-                      color: t === tab ? '#F8F6F0' : enabled ? 'rgba(248,246,240,0.55)' : 'rgba(248,246,240,0.25)',
-                      borderBottom: t === tab ? '2px solid #B8894A' : '2px solid transparent',
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px',
+                      background: tab === key ? '#F4F1EA' : 'none', border: 'none', cursor: 'pointer',
+                      fontSize: 13.5, fontWeight: 500, color: '#1B211D', textAlign: 'left',
                     }}
-                  >{t}{!enabled ? ' (soon)' : ''}</button>
-                );
-              })}
-            </nav>
-            <button onClick={() => supabase.auth.signOut()} style={{ background: '#1F4D3D', color: '#F8F6F0', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Sign out</button>
+                  ><Icon color="#1F4D3D" />{label}</button>
+                ))}
+                <div style={{ height: 1, background: '#E3DECF' }} />
+                <div style={{ padding: '10px 16px', fontSize: 11.5, color: '#6B7268' }}>{session.user.email}</div>
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  style={{ width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, fontWeight: 500, color: '#9C4A34', textAlign: 'left' }}
+                >Sign out</button>
+              </div>
+            )}
           </div>
         </header>
 
+        {activeMenuTab && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 12.5, color: '#6B7268' }}>
+            <button onClick={() => setTab('overview')} style={{ background: 'none', border: 'none', color: '#6B7268', cursor: 'pointer', padding: 0, fontSize: 12.5 }}>Overview</button>
+            <span>/</span>
+            <span style={{ color: '#1B211D', fontWeight: 600 }}>{activeMenuTab.label}</span>
+          </div>
+        )}
+
         {loadErr && <div style={{ color: '#9C4A34' }}>Couldn't load your household: {loadErr}</div>}
-        {!loadErr && !household && <div style={{ color: 'rgba(248,246,240,0.6)' }}>Loading…</div>}
+        {!loadErr && !household && <div style={{ color: '#6B7268' }}>Loading…</div>}
         {household && tab === 'overview' && <Overview householdId={household.householdId} onSelectAccount={goToAccountTransactions} />}
         {household && tab === 'transactions' && <Transactions householdId={household.householdId} initialAccountFilter={pendingAccountFilter} onConsumeInitialFilter={() => setPendingAccountFilter(null)} />}
         {household && tab === 'upcoming' && <Upcoming householdId={household.householdId} />}
         {household && tab === 'allocations' && <Allocations householdId={household.householdId} />}
         {household && tab === 'import' && <Import householdId={household.householdId} />}
       </div>
+
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, background: '#FFFFFF', borderTop: '1px solid #E3DECF',
+        display: 'flex', justifyContent: 'center', padding: '8px 0', boxShadow: '0 -4px 16px rgba(27,33,29,0.06)',
+      }}>
+        <div style={{ display: 'flex', gap: 8, maxWidth: 400, width: '100%', justifyContent: 'space-around' }}>
+          {CORE_TABS.map(({ key, label, Icon }) => {
+            const active = tab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 14px',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <Icon color={active ? '#1F4D3D' : '#A8A399'} />
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F4D3D' : '#A8A399' }}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
