@@ -36,7 +36,7 @@ const s = {
   field: { padding: '5px 8px', border: '1px solid #E3DECF', borderRadius: 4, fontSize: 12, background: '#fff' },
 };
 
-export default function Overview({ householdId }) {
+export default function Overview({ householdId, onSelectAccount }) {
   const [accounts, setAccounts] = useState(null);
   const [netWorthItems, setNetWorthItems] = useState([]);
   const [rules, setRules] = useState(null);
@@ -254,7 +254,12 @@ export default function Overview({ householdId }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 14 }}>
         {accounts.map(a => (
-          <div key={a.id} style={{ ...s.card, padding: 16 }}>
+          <div
+            key={a.id}
+            onClick={() => onSelectAccount && onSelectAccount(a.id)}
+            style={{ ...s.card, padding: 16, cursor: onSelectAccount ? 'pointer' : 'default' }}
+            title={onSelectAccount ? `View ${a.name}'s transactions` : undefined}
+          >
             <div style={s.label}>{a.name}</div>
             <div style={{ ...s.num, fontSize: 20, fontWeight: 600, color: (balances[a.id] || 0) < 0 ? '#9C4A34' : '#1B211D' }}>{fmtCAD(balances[a.id])}</div>
           </div>

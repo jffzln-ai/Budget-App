@@ -64,6 +64,7 @@ export default function Upcoming({ householdId }) {
   const [error, setError] = useState(null);
   const [busyKey, setBusyKey] = useState(null);
   const [view, setView] = useState('list');
+  const [accountFilter, setAccountFilter] = useState('all');
   const [calendarMonth, setCalendarMonth] = useState(thisMonthYm());
   const [plannedForm, setPlannedForm] = useState({ description: '', account_id: '', date: '', amount: '' });
   const [savingPlanned, setSavingPlanned] = useState(false);
@@ -120,17 +121,22 @@ export default function Upcoming({ householdId }) {
       .reduce((sum, o) => sum + o.rule.expected_amount, 0);
   }, [occurrences, infinityAccount, nextPayrollDate]);
 
+  const displayedOccurrences = useMemo(() => {
+    if (accountFilter === 'all') return occurrences;
+    return occurrences.filter(o => o.rule.account_id === accountFilter);
+  }, [occurrences, accountFilter]);
+
   const monthGroups = useMemo(() => {
     const groups = {};
-    occurrences.forEach(o => { const ym = o.date.slice(0, 7); (groups[ym] = groups[ym] || []).push(o); });
+    displayedOccurrences.forEach(o => { const ym = o.date.slice(0, 7); (groups[ym] = groups[ym] || []).push(o); });
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [occurrences]);
+  }, [displayedOccurrences]);
 
   const occByDate = useMemo(() => {
     const map = {};
-    occurrences.forEach(o => { (map[o.date] = map[o.date] || []).push(o); });
+    displayedOccurrences.forEach(o => { (map[o.date] = map[o.date] || []).push(o); });
     return map;
-  }, [occurrences]);
+  }, [displayedOccurrences]);
 
   async function handleConfirm(rule) {
     setBusyKey(rule.id);
@@ -304,9 +310,15 @@ export default function Upcoming({ householdId }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, gap: 0 }}>
-        <button style={{ ...s.segBtn(view === 'list'), borderRadius: '4px 0 0 4px' }} onClick={() => setView('list')}>List</button>
-        <button style={{ ...s.segBtn(view === 'calendar'), borderRadius: '0 4px 4px 0' }} onClick={() => setView('calendar')}>Calendar</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
+        <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
+          <option value="all">All accounts</option>
+          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button style={{ ...s.segBtn(view === 'list'), borderRadius: '4px 0 0 4px' }} onClick={() => setView('list')}>List</button>
+          <button style={{ ...s.segBtn(view === 'calendar'), borderRadius: '0 4px 4px 0' }} onClick={() => setView('calendar')}>Calendar</button>
+        </div>
       </div>
 
       {nextPayrollDate && (

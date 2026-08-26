@@ -90,6 +90,12 @@ function DashboardScreen({ session }) {
   const [household, setHousehold] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [tab, setTab] = useState('overview');
+  const [pendingAccountFilter, setPendingAccountFilter] = useState(null);
+
+  function goToAccountTransactions(accountId) {
+    setPendingAccountFilter(accountId);
+    setTab('transactions');
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -137,8 +143,8 @@ function DashboardScreen({ session }) {
 
         {loadErr && <div style={{ color: '#9C4A34' }}>Couldn't load your household: {loadErr}</div>}
         {!loadErr && !household && <div style={{ color: 'rgba(248,246,240,0.6)' }}>Loading…</div>}
-        {household && tab === 'overview' && <Overview householdId={household.householdId} />}
-        {household && tab === 'transactions' && <Transactions householdId={household.householdId} />}
+        {household && tab === 'overview' && <Overview householdId={household.householdId} onSelectAccount={goToAccountTransactions} />}
+        {household && tab === 'transactions' && <Transactions householdId={household.householdId} initialAccountFilter={pendingAccountFilter} onConsumeInitialFilter={() => setPendingAccountFilter(null)} />}
         {household && tab === 'upcoming' && <Upcoming householdId={household.householdId} />}
         {household && tab === 'allocations' && <Allocations householdId={household.householdId} />}
         {household && tab === 'import' && <Import householdId={household.householdId} />}

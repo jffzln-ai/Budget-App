@@ -31,7 +31,7 @@ function monthLabel(ym) {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
 }
 
-export default function Transactions({ householdId }) {
+export default function Transactions({ householdId, initialAccountFilter, onConsumeInitialFilter }) {
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
@@ -50,8 +50,12 @@ export default function Transactions({ householdId }) {
   const [pendingBulkApply, setPendingBulkApply] = useState(null);
   const [showManageCategories, setShowManageCategories] = useState(false);
   const [editingDetailsId, setEditingDetailsId] = useState(null);
-  const [detailsDraft, setDetailsDraft] = useState({ raw_description: '', date: '', amount: '' });
+  const [detailsDraft, setDetailsDraft] = useState({ raw_description: '', date: '', amount: '', account_id: '' });
   const [busyId, setBusyId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkCategoryChoice, setBulkCategoryChoice] = useState('');
+  const [bulkAccountChoice, setBulkAccountChoice] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   async function load() {
     try {
@@ -70,6 +74,14 @@ export default function Transactions({ householdId }) {
   }
 
   useEffect(() => { load(); }, [householdId]);
+
+  useEffect(() => {
+    if (initialAccountFilter) {
+      setAccountFilter(initialAccountFilter);
+      if (onConsumeInitialFilter) onConsumeInitialFilter();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAccountFilter]);
 
   const accountsById = useMemo(() => {
     const map = {};
@@ -216,6 +228,51 @@ export default function Transactions({ householdId }) {
     }
   }
 
+  useEffect(() => { setSelectedIds(new Set()); }, [accountFilter, period, q, showTransfers, unmatchedOnly]);
+
+  function toggleSelected(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds(prev => {
+      const allSelected = filtered.length > 0 && filtered.every(t => prev.has(t.id));
+      return allSelected ? new Set() : new Set(filtered.map(t => t.id));
+    });
+  }
+
+  async function handleBulkCategory() {
+    if (!bulkCategoryChoice || selectedIds.size === 0) return;
+    setBulkBusy(true);
+    let failed = 0;
+    for (const id of selectedIds) {
+      try { await updateTransaction(id, { category: bulkCategoryChoice }); } catch { failed += 1; }
+    }
+    setSelectedIds(new Set());
+    setBulkCategoryChoice('');
+    await load();
+    setBulkBusy(false);
+    if (failed) setError(`${failed} transaction${failed === 1 ? '' : 's'} couldn't be recategorized.`);
+  }
+
+  async function handleBulkAccount() {
+    if (!bulkAccountChoice || selectedIds.size === 0) return;
+    setBulkBusy(true);
+    let failed = 0;
+    for (const id of selectedIds) {
+      try { await updateTransaction(id, { account_id: bulkAccountChoice }); } catch { failed += 1; }
+    }
+    setSelectedIds(new Set());
+    setBulkAccountChoice('');
+    await load();
+    setBulkBusy(false);
+    if (failed) setError(`${failed} transaction${failed === 1 ? '' : 's'} couldn't be moved - most likely an identical transaction already exists on that account.`);
+  }
+
   async function toggleReconciled(txn) {
     const isReconciled = (tags[txn.id] || []).includes('reconciled');
     setBusyId(txn.id);
@@ -232,7 +289,7 @@ export default function Transactions({ householdId }) {
 
   function startEditDetails(txn) {
     setEditingDetailsId(txn.id);
-    setDetailsDraft({ raw_description: txn.raw_description, date: txn.date, amount: String(txn.amount) });
+    setDetailsDraft({ raw_description: txn.raw_description, date: txn.date, amount: String(txn.amount), account_id: txn.account_id });
   }
 
   async function saveDetails(txn) {
@@ -240,11 +297,21 @@ export default function Transactions({ householdId }) {
     if (!detailsDraft.raw_description.trim() || !detailsDraft.date || Number.isNaN(amt)) return;
     setBusyId(txn.id);
     try {
-      await updateTransaction(txn.id, { raw_description: detailsDraft.raw_description.trim(), date: detailsDraft.date, amount: amt });
+      await updateTransaction(txn.id, {
+        raw_description: detailsDraft.raw_description.trim(), date: detailsDraft.date, amount: amt, account_id: detailsDraft.account_id,
+      });
       setEditingDetailsId(null);
       await load();
     } catch (err) {
-      setError(err.message);
+      // The DB won't allow two identical (account, date, description, amount)
+      // rows to coexist - if reassigning this transaction would collide with
+      // one already on the target account, surface that plainly rather than
+      // a raw constraint-violation message.
+      if (err.message && err.message.includes('duplicate key')) {
+        setError('An identical transaction already exists on that account - this looks like it may already be recorded there.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setBusyId(null);
     }
@@ -279,11 +346,36 @@ export default function Transactions({ householdId }) {
         <div style={{ fontSize: 12, color: '#6B7268', marginLeft: 'auto' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
       </div>
 
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'baseline', background: '#FCFBF8' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #E3DECF', display: 'flex', gap: 18, alignItems: 'center', background: '#FCFBF8' }}>
+        <label style={{ fontSize: 12, color: '#6B7268', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={filtered.length > 0 && filtered.every(t => selectedIds.has(t.id))} onChange={toggleSelectAllVisible} />
+          Select all
+        </label>
         <span style={{ fontSize: 12, color: '#6B7268' }}>In: <span style={{ ...s.num, color: '#1F4D3D', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
         <span style={{ fontSize: 12, color: '#6B7268' }}>Out: <span style={{ ...s.num, color: '#1B211D', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
         <span style={{ fontSize: 12, color: '#6B7268' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? '#9C4A34' : '#1F4D3D' }}>{fmtCAD(totals.net)}</span></span>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div style={{ padding: 14, borderBottom: '1px solid #E3DECF', background: '#EEF3EF', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{selectedIds.size} selected</div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <select style={s.field} value={bulkCategoryChoice} onChange={e => setBulkCategoryChoice(e.target.value)}>
+              <option value="">Set category to…</option>
+              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button style={s.primaryBtn} disabled={!bulkCategoryChoice || bulkBusy} onClick={handleBulkCategory}>{bulkBusy ? '…' : 'Apply'}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <select style={s.field} value={bulkAccountChoice} onChange={e => setBulkAccountChoice(e.target.value)}>
+              <option value="">Move to account…</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <button style={s.primaryBtn} disabled={!bulkAccountChoice || bulkBusy} onClick={handleBulkAccount}>{bulkBusy ? '…' : 'Apply'}</button>
+          </div>
+          <button style={s.smallBtn} onClick={() => setSelectedIds(new Set())}>Clear selection</button>
+        </div>
+      )}
 
       {showManageCategories && (
         <div style={{ padding: 16, borderBottom: '1px solid #E3DECF', background: '#FCFBF8' }}>
@@ -344,12 +436,24 @@ export default function Transactions({ householdId }) {
                     <div style={{ fontSize: 10, color: '#6B7268' }}>Amount</div>
                     <input style={{ ...s.field, width: 90 }} type="number" value={detailsDraft.amount} onChange={e => setDetailsDraft(d => ({ ...d, amount: e.target.value }))} />
                   </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#6B7268' }}>Account</div>
+                    <select style={s.field} value={detailsDraft.account_id} onChange={e => setDetailsDraft(d => ({ ...d, account_id: e.target.value }))}>
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
                   <button style={s.primaryBtn} disabled={busy} onClick={() => saveDetails(t)}>{busy ? 'Saving…' : 'Save'}</button>
                   <button style={s.smallBtn} onClick={() => setEditingDetailsId(null)}>Cancel</button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(t.id)}
+                      onChange={() => toggleSelected(t.id)}
+                      style={{ flexShrink: 0 }}
+                    />
                     <button
                       onClick={() => !busy && toggleReconciled(t)}
                       title={isReconciled ? 'Reconciled - click to unmark' : 'Mark as reconciled'}
