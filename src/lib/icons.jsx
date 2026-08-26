@@ -55,6 +55,15 @@ export function IconClock({ color = 'currentColor' }) {
   );
 }
 
+export function IconWallet({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <path d="M3 7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+      <path d="M16 12h3" />
+    </svg>
+  );
+}
+
 export function IconMore({ color = 'currentColor' }) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round">

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAccounts, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
-import { ProgressRing } from './lib/icons.jsx';
+import { ProgressRing, IconClock, IconWallet } from './lib/icons.jsx';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -39,6 +39,7 @@ const s = {
 const RUST = 'var(--rust)';
 const PINE = 'var(--pine)';
 const PINE_SOFT = 'var(--pine-soft)';
+const GOLD = 'var(--gold)';
 
 export default function Overview({ householdId, onSelectAccount }) {
   const [accounts, setAccounts] = useState(null);
@@ -200,53 +201,63 @@ export default function Overview({ householdId, onSelectAccount }) {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 14 }}>
-        <div style={s.card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-            <div style={s.label}>{horizon === 'payday' ? 'Safe to spend' : 'Projected free cash'}</div>
-            <select value={horizon} onChange={e => setHorizon(e.target.value)} style={s.field}>
-              <option value="payday">By next payday</option>
-              {horizonMonths.map(ym => <option key={ym} value={ym}>End of {monthLabel(ym)}</option>)}
-            </select>
+      <div style={{ background: PINE, borderRadius: 20, padding: 22, marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)' }}>
+            {horizon === 'payday' ? 'Safe to spend' : 'Projected free cash'}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 6 }}>
-            <ProgressRing value={heroValue} max={heroMax} size={104} strokeWidth={10} color={heroColor} trackColor={PINE_SOFT}>
-              <div style={{ ...s.num, fontSize: 12, fontWeight: 700, color: heroColor, textAlign: 'center', lineHeight: 1.2 }}>
-                {fmtCAD(heroValue)}
-              </div>
-            </ProgressRing>
-            <div>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-                out of <span style={{ ...s.num, fontWeight: 600, color: 'var(--ink)' }}>{fmtCAD(heroMax)}</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6 }}>
-                Committed: <span style={{ ...s.num, fontWeight: 600, color: 'var(--ink)' }}>{fmtCAD(committedThroughHorizon)}</span>
-              </div>
+          <select value={horizon} onChange={e => setHorizon(e.target.value)} style={s.field}>
+            <option value="payday">By next payday</option>
+            {horizonMonths.map(ym => <option key={ym} value={ym}>End of {monthLabel(ym)}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 10 }}>
+          <ProgressRing value={heroValue} max={heroMax} size={104} strokeWidth={10} color="#FFFFFF" trackColor="rgba(255,255,255,0.2)">
+            <div style={{ ...s.num, fontSize: 20, fontWeight: 700, color: '#FFFFFF', textAlign: 'center', lineHeight: 1.2 }}>
+              {fmtCAD(heroValue)}
+            </div>
+          </ProgressRing>
+          <div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6 }}>
+              out of <span style={{ ...s.num, fontWeight: 700, color: '#FFFFFF' }}>{fmtCAD(heroMax)}</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
+              Committed: <span style={{ ...s.num, fontWeight: 700, color: '#FFFFFF' }}>{fmtCAD(committedThroughHorizon)}</span>
             </div>
           </div>
-        </div>
-        <div style={s.card}>
-          <div style={s.label}>Days to payday</div>
-          <div style={{ ...s.num, fontSize: 32, fontWeight: 700, color: 'var(--ink)', marginTop: 4 }}>{daysToPayday ?? '—'}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>{nextPayrollDate ? `next payday ${fmtDate(nextPayrollDate)}` : 'no payroll rule found'}</div>
-        </div>
-        <div style={s.card}>
-          <div style={s.label}>Cash on hand</div>
-          <div style={{ ...s.num, fontSize: 32, fontWeight: 700, color: cashOnHand < 100 ? RUST : PINE, marginTop: 4 }}>{fmtCAD(cashOnHand)}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>Infinity</div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <div style={{ background: 'var(--card)', border: '0.5px solid var(--line)', borderLeft: `3px solid ${GOLD}`, borderRadius: '0 16px 16px 0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <IconClock color={GOLD} />
+          <div>
+            <div style={s.label}>Days to payday</div>
+            <div style={{ ...s.num, fontSize: 22, fontWeight: 700, color: 'var(--ink)' }}>{daysToPayday ?? '—'}</div>
+          </div>
+        </div>
+        <div style={{ background: 'var(--card)', border: '0.5px solid var(--line)', borderLeft: `3px solid ${PINE}`, borderRadius: '0 16px 16px 0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <IconWallet color={PINE} />
+          <div>
+            <div style={s.label}>Cash on hand</div>
+            <div style={{ ...s.num, fontSize: 22, fontWeight: 700, color: cashOnHand < 100 ? RUST : 'var(--ink)' }}>{fmtCAD(cashOnHand)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ ...s.card, padding: 8, marginBottom: 14 }}>
         {accounts.map(a => (
           <div
             key={a.id}
             onClick={() => onSelectAccount && onSelectAccount(a.id)}
-            style={{ ...s.card, padding: 18, cursor: onSelectAccount ? 'pointer' : 'default' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 14, cursor: onSelectAccount ? 'pointer' : 'default' }}
             title={onSelectAccount ? `View ${a.name}'s transactions` : undefined}
           >
-            <div style={s.label}>{a.name}</div>
-            <div style={{ ...s.num, fontSize: 21, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</div>
+            <span style={{ width: 32, height: 32, borderRadius: '50%', background: PINE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: PINE, flexShrink: 0 }}>
+              {a.name[0]}
+            </span>
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{a.name}</span>
+            <span style={{ ...s.num, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
           </div>
         ))}
       </div>
