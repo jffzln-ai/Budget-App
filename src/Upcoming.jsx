@@ -4,6 +4,7 @@ import {
   getAccounts, getPlannedTransactions, addPlannedTransaction, removePlannedTransaction, updatePlannedTransaction,
 } from './lib/queries.js';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
+import { IconMoreVertical } from './lib/icons.jsx';
 
 const STATUS_LABEL = { active: 'Confirmed', needs_confirmation: 'Needs confirmation', pending_info: 'Waiting on you', dismissed: 'Dismissed' };
 const STATUS_COLOR = { active: 'var(--pine)', needs_confirmation: 'var(--gold)', pending_info: 'var(--rust)', dismissed: 'var(--ink-soft)' };
@@ -45,6 +46,11 @@ function countsTowardTotal(o) {
   return o.rule.status !== 'needs_confirmation' && !(o.rule.skipped_dates || []).includes(o.date);
 }
 
+const overflowItemStyle = {
+  width: '100%', display: 'block', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none',
+  cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--ink)',
+};
+
 const s = {
   card: { background: 'var(--card)', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
   row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', gap: 12, flexWrap: 'wrap' },
@@ -71,6 +77,15 @@ export default function Upcoming({ householdId }) {
   const [editingAmountId, setEditingAmountId] = useState(null);
   const [amountDraft, setAmountDraft] = useState('');
   const [editingPlannedId, setEditingPlannedId] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  useEffect(() => {
+    function closeMenu(e) {
+      if (!e.target.closest('[data-row-menu]')) setOpenMenuId(null);
+    }
+    document.addEventListener('mousedown', closeMenu);
+    return () => document.removeEventListener('mousedown', closeMenu);
+  }, []);
   const [plannedDraft, setPlannedDraft] = useState({ description: '', date: '', amount: '' });
 
   async function load() {
@@ -289,20 +304,35 @@ export default function Upcoming({ householdId }) {
               {income ? '+' : ''}{fmtCAD(o.rule.expected_amount)}
             </span>
           )}
-          {editingAmountId !== o.rule.id && (o.rule.planned ? (<>
-            <button style={s.ghostBtn} onClick={() => startEditPlanned(plannedTxns.find(p => p.id === o.rule.id))}>Edit</button>
-            <button style={s.dangerBtn} onClick={() => handleRemovePlanned(o.rule.id)}>Delete</button>
-          </>) : (<>
-            {!income && o.rule.status !== 'needs_confirmation' && (
-              <button style={s.ghostBtn} disabled={busy} onClick={() => handleSkip(o)}>{busy ? '…' : isSkipped ? 'Restore' : 'Skip'}</button>
-            )}
-            {!income && <span style={s.badge(STATUS_COLOR[o.rule.status])}>{STATUS_LABEL[o.rule.status]}</span>}
-            {o.rule.status === 'needs_confirmation' && (
+          {editingAmountId !== o.rule.id && (<>
+            {!o.rule.planned && !income && <span style={s.badge(STATUS_COLOR[o.rule.status])}>{STATUS_LABEL[o.rule.status]}</span>}
+            {!o.rule.planned && o.rule.status === 'needs_confirmation' && (
               <button style={s.btn} disabled={busy} onClick={() => handleConfirm(o.rule)}>{busy ? 'Saving…' : 'Confirm'}</button>
             )}
-            <button style={s.ghostBtn} onClick={() => startEditAmount(o.rule.id, o.rule.expected_amount)}>Edit</button>
-            <button style={s.dangerBtn} onClick={() => handleDismissRule(o.rule)}>Delete</button>
-          </>))}
+            {!o.rule.planned && !income && o.rule.status !== 'needs_confirmation' && (
+              <button style={s.ghostBtn} disabled={busy} onClick={() => handleSkip(o)}>{busy ? '…' : isSkipped ? 'Restore' : 'Skip'}</button>
+            )}
+            <div data-row-menu style={{ position: 'relative' }}>
+              <button
+                onClick={() => setOpenMenuId(openMenuId === o.occId ? null : o.occId)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+              ><IconMoreVertical color="var(--ink-soft)" /></button>
+              {openMenuId === o.occId && (
+                <div style={{
+                  position: 'absolute', right: 0, top: 30, background: 'var(--card)', borderRadius: 12,
+                  boxShadow: '0 8px 24px rgba(27,33,29,0.16)', minWidth: 130, overflow: 'hidden', zIndex: 10,
+                }}>
+                  {o.rule.planned ? (<>
+                    <button onClick={() => { startEditPlanned(plannedTxns.find(p => p.id === o.rule.id)); setOpenMenuId(null); }} style={overflowItemStyle}>Edit</button>
+                    <button onClick={() => { handleRemovePlanned(o.rule.id); setOpenMenuId(null); }} style={{ ...overflowItemStyle, color: 'var(--rust)' }}>Delete</button>
+                  </>) : (<>
+                    <button onClick={() => { startEditAmount(o.rule.id, o.rule.expected_amount); setOpenMenuId(null); }} style={overflowItemStyle}>Edit</button>
+                    <button onClick={() => { handleDismissRule(o.rule); setOpenMenuId(null); }} style={{ ...overflowItemStyle, color: 'var(--rust)' }}>Delete</button>
+                  </>)}
+                </div>
+              )}
+            </div>
+          </>)}
         </div>
       </div>
     );

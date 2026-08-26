@@ -64,12 +64,60 @@ export function IconWallet({ color = 'currentColor' }) {
   );
 }
 
+export function IconBank({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <path d="M3 10 12 4l9 6" />
+      <path d="M5 10v9M9 10v9M15 10v9M19 10v9" />
+      <path d="M3 19h18" />
+    </svg>
+  );
+}
+
+export function IconPiggyBank({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <path d="M4 12a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1h1.5L21 15h-2v2a1 1 0 0 1-1 1h-2v-2H9v2a1 1 0 0 1-1 1H6v-3a5 5 0 0 1-2-4Z" />
+      <circle cx="8" cy="11" r="0.6" fill={color} stroke="none" />
+      <path d="M9 7V5" />
+    </svg>
+  );
+}
+
+export function IconCreditCard({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M7 15h4" />
+    </svg>
+  );
+}
+
+export function IconChevronRight({ color = 'currentColor' }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
 export function IconMore({ color = 'currentColor' }) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round">
       <circle cx="5" cy="12" r="1.4" fill={color} stroke="none" />
       <circle cx="12" cy="12" r="1.4" fill={color} stroke="none" />
       <circle cx="19" cy="12" r="1.4" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
+export function IconMoreVertical({ color = 'currentColor' }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="5" r="1.4" fill={color} stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill={color} stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill={color} stroke="none" />
     </svg>
   );
 }

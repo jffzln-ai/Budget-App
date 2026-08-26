@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAccounts, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
-import { ProgressRing, IconClock, IconWallet } from './lib/icons.jsx';
+import { ProgressRing, IconClock, IconWallet, IconBank, IconPiggyBank, IconCreditCard, IconChevronRight } from './lib/icons.jsx';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -40,6 +40,16 @@ const RUST = 'var(--rust)';
 const PINE = 'var(--pine)';
 const PINE_SOFT = 'var(--pine-soft)';
 const GOLD = 'var(--gold)';
+
+function accountVisual(type) {
+  switch (type) {
+    case 'savings': return { Icon: IconPiggyBank, color: GOLD };
+    case 'credit_card':
+    case 'line_of_credit': return { Icon: IconCreditCard, color: RUST };
+    case 'investment': return { Icon: IconWallet, color: GOLD };
+    default: return { Icon: IconBank, color: PINE };
+  }
+}
 
 export default function Overview({ householdId, onSelectAccount }) {
   const [accounts, setAccounts] = useState(null);
@@ -246,20 +256,24 @@ export default function Overview({ householdId, onSelectAccount }) {
       </div>
 
       <div style={{ ...s.card, padding: 8, marginBottom: 14 }}>
-        {accounts.map(a => (
-          <div
-            key={a.id}
-            onClick={() => onSelectAccount && onSelectAccount(a.id)}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 14, cursor: onSelectAccount ? 'pointer' : 'default' }}
-            title={onSelectAccount ? `View ${a.name}'s transactions` : undefined}
-          >
-            <span style={{ width: 32, height: 32, borderRadius: '50%', background: PINE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: PINE, flexShrink: 0 }}>
-              {a.name[0]}
-            </span>
-            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{a.name}</span>
-            <span style={{ ...s.num, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
-          </div>
-        ))}
+        {accounts.map(a => {
+          const { Icon, color } = accountVisual(a.type);
+          return (
+            <div
+              key={a.id}
+              onClick={() => onSelectAccount && onSelectAccount(a.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 14, cursor: onSelectAccount ? 'pointer' : 'default' }}
+              title={onSelectAccount ? `View ${a.name}'s transactions` : undefined}
+            >
+              <span style={{ width: 34, height: 34, borderRadius: '50%', background: PINE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon color={color} />
+              </span>
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{a.name}</span>
+              <span style={{ ...s.num, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
+              {onSelectAccount && <IconChevronRight color="var(--ink-soft)" />}
+            </div>
+          );
+        })}
       </div>
 
       <div style={s.card}>
