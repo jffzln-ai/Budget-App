@@ -41,7 +41,7 @@ const RUST = '#9C4A34';
 const PINE = '#1F4D3D';
 const PINE_SOFT = '#E3ECE6';
 
-export default function Overview({ householdId, onSelectAccount }) {
+export default function Overview({ householdId, onSelectAccount, onManageNetWorth }) {
   const [accounts, setAccounts] = useState(null);
   const [netWorthItems, setNetWorthItems] = useState([]);
   const [rules, setRules] = useState(null);
@@ -229,6 +229,11 @@ export default function Overview({ householdId, onSelectAccount }) {
               <div style={s.label}>Net worth</div>
               <span style={{ color: '#8A8477', fontSize: 11, marginTop: -6 }}>▴</span>
             </div>
+            {onManageNetWorth && (
+              <button onClick={onManageNetWorth} style={{ background: 'none', border: 'none', color: '#8A8477', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
+                Manage →
+              </button>
+            )}
           </div>
           <div style={{ ...s.num, fontSize: 34, fontWeight: 700, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</div>
           <div style={{ fontSize: 11.5, color: '#8A8477', marginTop: 4 }}>all accounts{netWorthItems.length ? ` + ${netWorthItems.length} other item${netWorthItems.length === 1 ? '' : 's'}` : ''}</div>

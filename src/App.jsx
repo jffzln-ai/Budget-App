@@ -5,8 +5,9 @@ import Overview from './Overview.jsx';
 import Transactions from './Transactions.jsx';
 import Upcoming from './Upcoming.jsx';
 import Allocations from './Allocations.jsx';
+import NetWorth from './NetWorth.jsx';
 import Import from './Import.jsx';
-import { IconHome, IconList, IconClock, IconMore, IconLayers, IconUpload } from './lib/icons.jsx';
+import { IconHome, IconList, IconClock, IconMore, IconLayers, IconUpload, IconTrendingUp } from './lib/icons.jsx';
 
 const styles = {
   page: {
@@ -93,6 +94,7 @@ const CORE_TABS = [
   { key: 'upcoming', label: 'Upcoming', Icon: IconClock },
 ];
 const MENU_TABS = [
+  { key: 'networth', label: 'Net Worth', Icon: IconTrendingUp },
   { key: 'allocations', label: 'Allocations', Icon: IconLayers },
   { key: 'import', label: 'Import', Icon: IconUpload },
 ];
@@ -183,9 +185,10 @@ function DashboardScreen({ session }) {
 
         {loadErr && <div style={{ color: '#9C4A34' }}>Couldn't load your household: {loadErr}</div>}
         {!loadErr && !household && <div style={{ color: '#6B7268' }}>Loading…</div>}
-        {household && tab === 'overview' && <Overview householdId={household.householdId} onSelectAccount={goToAccountTransactions} />}
+        {household && tab === 'overview' && <Overview householdId={household.householdId} onSelectAccount={goToAccountTransactions} onManageNetWorth={() => setTab('networth')} />}
         {household && tab === 'transactions' && <Transactions householdId={household.householdId} initialAccountFilter={pendingAccountFilter} onConsumeInitialFilter={() => setPendingAccountFilter(null)} />}
         {household && tab === 'upcoming' && <Upcoming householdId={household.householdId} />}
+        {household && tab === 'networth' && <NetWorth householdId={household.householdId} />}
         {household && tab === 'allocations' && <Allocations householdId={household.householdId} />}
         {household && tab === 'import' && <Import householdId={household.householdId} />}
       </div>

@@ -74,6 +74,15 @@ export function IconLayers({ color = 'currentColor' }) {
   );
 }
 
+export function IconTrendingUp({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <path d="M3 17l6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </svg>
+  );
+}
+
 export function IconUpload({ color = 'currentColor' }) {
   return (
     <svg {...iconProps} stroke={color}>
