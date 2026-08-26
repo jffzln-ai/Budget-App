@@ -11,8 +11,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "papaparse": "^5.4.1",
+    "plaid": "^46.0.0",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^18.3.0",
+    "react-plaid-link": "^5.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",

@@ -8,6 +8,7 @@ import {
 import { detectCsvFormat, parseCsvRows } from './lib/csvParser.js';
 import { categorizeRaw } from './lib/categorize.js';
 import { matchTransfers, detectNewRecurring } from './lib/reconcile.js';
+import PlaidConnect from './PlaidConnect.jsx';
 
 function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, ' '); }
 
@@ -217,6 +218,7 @@ export default function Import({ householdId }) {
           </div>
         </div>
       )}
+      <PlaidConnect householdId={householdId} />
     </div>
   );
 }
