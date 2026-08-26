@@ -5,6 +5,7 @@ import {
   getAllTransactions, getTransactionTags, getRecurringRules, insertRecurringRuleCandidates,
   getCategoryRules,
 } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 import { detectCsvFormat, parseCsvRows } from './lib/csvParser.js';
 import { categorizeRaw } from './lib/categorize.js';
 import { matchTransfers, detectNewRecurring } from './lib/reconcile.js';
@@ -163,7 +164,7 @@ export default function Import({ householdId }) {
     }
   }
 
-  if (!accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
+  if (!accounts) return <LoadingState />;
 
   return (
     <div style={s.card}>

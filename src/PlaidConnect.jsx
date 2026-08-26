@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { getAccounts } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 import { createLinkToken, exchangePublicToken, getConnections, mapAccount, syncItem } from './lib/plaidApi.js';
 
 function fmtDateTime(iso) {
@@ -156,8 +157,8 @@ export default function PlaidConnect({ householdId }) {
     }
   }
 
-  if (error && !connections) return <div style={{ color: 'var(--rust)', marginTop: 20, fontSize: 13 }}>Couldn't load bank connections: {error}</div>;
-  if (!connections) return <div style={{ color: 'var(--ink-soft)', marginTop: 20 }}>Loading bank connections…</div>;
+  if (error && !connections) return <ErrorState message={`Couldn't load bank connections: ${error}`} />;
+  if (!connections) return <LoadingState label="Loading bank connections…" />;
 
   return (
     <div style={s.card}>

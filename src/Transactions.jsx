@@ -5,6 +5,8 @@ import {
   getCustomCategories, addCustomCategory, getCategoryRules, setCategoryRule, removeCategoryRule, applyCategoryToMatching,
   linkTransfer,
 } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
+import { IconTrendingUp, IconTrendingDown } from './lib/icons.jsx';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -322,8 +324,8 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
 
   const activeFilterCount = [accountFilter !== 'all', period !== 'all', showTransfers, unmatchedOnly].filter(Boolean).length;
 
-  if (error) return <div style={{ color: 'var(--rust)' }}>Couldn't load transactions: {error}</div>;
-  if (!transactions || !accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading transactions…</div>;
+  if (error) return <ErrorState message={`Couldn't load transactions: ${error}`} />;
+  if (!transactions || !accounts) return <LoadingState label="Loading transactions…" />;
 
   return (
     <div style={s.card}>
@@ -375,14 +377,24 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
         </div>
       </div>
 
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 18, alignItems: 'center', background: CREAM_TINT }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: CREAM_TINT }}>
         <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={filtered.length > 0 && filtered.every(t => selectedIds.has(t.id))} onChange={toggleSelectAllVisible} />
           Select all
         </label>
-        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>In: <span style={{ ...s.num, color: 'var(--pine)', fontWeight: 600 }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Out: <span style={{ ...s.num, color: 'var(--ink)', fontWeight: 600 }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Net: <span style={{ ...s.num, fontWeight: 700, color: totals.net < 0 ? 'var(--rust)' : 'var(--pine)' }}>{fmtCAD(totals.net)}</span></span>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 8px', borderRadius: 999, background: 'var(--pine-soft)' }}>
+            <IconTrendingUp color="var(--pine)" />
+            <span style={{ ...s.num, fontSize: 12, fontWeight: 700, color: 'var(--pine)' }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 8px', borderRadius: 999, background: 'var(--line-soft)' }}>
+            <IconTrendingDown color="var(--ink)" />
+            <span style={{ ...s.num, fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, background: totals.net < 0 ? 'rgba(156,74,52,0.14)' : 'var(--pine-soft)' }}>
+            <span style={{ ...s.num, fontSize: 12, fontWeight: 700, color: totals.net < 0 ? 'var(--rust)' : 'var(--pine)' }}>Net {fmtCAD(totals.net)}</span>
+          </span>
+        </div>
       </div>
 
       {selectedIds.size > 0 && (
@@ -450,7 +462,10 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
           const isEditingDetails = editingDetailsId === t.id;
           const busy = busyId === t.id;
           return (
-            <div key={t.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
+            <div key={t.id} style={{
+              padding: '10px 16px', borderBottom: '1px solid var(--line)',
+              borderLeft: `3px solid ${t.is_transfer ? 'var(--line)' : t.amount > 0 ? 'var(--pine)' : 'transparent'}`,
+            }}>
               {isEditingDetails ? (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 160 }}>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAllTransactions, getTransactionTags, addTransactionTag, removeTransactionTag } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -74,8 +75,8 @@ export default function Reimbursements({ householdId }) {
     }
   }
 
-  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
-  if (!transactions) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
+  if (error) return <ErrorState message={error} />;
+  if (!transactions) return <LoadingState />;
 
   return (
     <div>

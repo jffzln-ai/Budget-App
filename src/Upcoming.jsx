@@ -3,6 +3,7 @@ import {
   getRecurringRules, confirmRule, toggleSkipOccurrence, dismissRule, updateRuleAmount,
   getAccounts, getPlannedTransactions, addPlannedTransaction, removePlannedTransaction, updatePlannedTransaction,
 } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 import { IconMoreVertical } from './lib/icons.jsx';
 
@@ -257,8 +258,8 @@ export default function Upcoming({ householdId }) {
     }
   }
 
-  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
-  if (!rules || !accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading upcoming…</div>;
+  if (error) return <ErrorState message={error} />;
+  if (!rules || !accounts) return <LoadingState label="Loading upcoming…" />;
 
   function renderOccurrence(o, moneyColor) {
     const isSkipped = (o.rule.skipped_dates || []).includes(o.date);
@@ -354,7 +355,7 @@ export default function Upcoming({ householdId }) {
       {nextPayrollDate && (
         <div style={{ ...s.card, padding: '14px 20px', marginBottom: 14, background: 'var(--pine)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontSize: 12, color: 'rgba(248,246,240,0.8)' }}>Due on Infinity before next payday ({fmtDate(nextPayrollDate)})</div>
-          <div style={{ ...s.num, fontSize: 20, fontWeight: 600, color: 'var(--hero-text)' }}>{fmtCAD(dueBeforePayday)}</div>
+          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: 'var(--hero-text)' }}>{fmtCAD(dueBeforePayday)}</div>
         </div>
       )}
 

@@ -162,12 +162,13 @@ function DashboardScreen({ session, theme, setTheme }) {
                 position: 'absolute', right: 0, top: 46, background: 'var(--card)', borderRadius: 14,
                 boxShadow: '0 8px 28px rgba(27,33,29,0.14)', minWidth: 210, overflow: 'hidden', zIndex: 20,
               }}>
+                <div style={{ padding: '10px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Pages</div>
                 {MENU_TABS.map(({ key, label, Icon }) => (
                   <button
                     key={key}
                     onClick={() => { setTab(key); setMenuOpen(false); }}
                     style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px',
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px',
                       background: tab === key ? 'var(--cream-tint)' : 'none', border: 'none', cursor: 'pointer',
                       fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', textAlign: 'left',
                     }}
@@ -192,7 +193,8 @@ function DashboardScreen({ session, theme, setTheme }) {
                   ))}
                 </div>
                 <div style={{ height: 1, background: 'var(--line)' }} />
-                <div style={{ padding: '10px 16px', fontSize: 11.5, color: 'var(--ink-soft)' }}>{session.user.email}</div>
+                <div style={{ padding: '10px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Account</div>
+                <div style={{ padding: '2px 16px 8px', fontSize: 11.5, color: 'var(--ink-soft)' }}>{session.user.email}</div>
                 <button
                   onClick={() => supabase.auth.signOut()}
                   style={{ width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, fontWeight: 500, color: 'var(--rust)', textAlign: 'left' }}

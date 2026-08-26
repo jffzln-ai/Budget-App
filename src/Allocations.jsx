@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getAccounts, getAllTransactions, computeLiveBalances } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -37,8 +38,8 @@ export default function Allocations({ householdId }) {
 
   useEffect(() => { load(); }, [householdId]);
 
-  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
-  if (!accounts || !transactions) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
+  if (error) return <ErrorState message={error} />;
+  if (!accounts || !transactions) return <LoadingState />;
 
   const savingsAccounts = accounts.filter(a => a.type === 'savings');
   const tfsa = accounts.find(a => a.type === 'investment');

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getAccounts, getNetWorthItems, addNetWorthItem, removeNetWorthItem, computeLiveBalances } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 
 const NET_WORTH_CATEGORIES = {
   asset: ['Real Estate', 'Vehicle', 'RRSP (External)', 'Other Investment', 'Other Asset'],
@@ -64,8 +65,8 @@ export default function NetWorth({ householdId }) {
     }
   }
 
-  if (error) return <div style={{ color: 'var(--rust)' }}>{error}</div>;
-  if (!accounts) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
+  if (error) return <ErrorState message={error} />;
+  if (!accounts) return <LoadingState />;
 
   const balances = computeLiveBalances(accounts);
   const accountAssetsTotal = accounts.reduce((sum, a) => sum + Math.max(balances[a.id] || 0, 0), 0);
@@ -80,7 +81,7 @@ export default function NetWorth({ householdId }) {
     <div>
       <div style={{ ...s.card, marginBottom: 14 }}>
         <div style={s.label}>Net worth</div>
-        <div style={{ ...s.num, fontSize: 38, fontWeight: 700, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</div>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 38, fontWeight: 600, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</div>
         <div style={{ display: 'flex', gap: 28, marginTop: 16 }}>
           <div>
             <div style={{ fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>Total assets</div>

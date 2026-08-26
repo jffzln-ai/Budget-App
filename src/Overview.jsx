@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAccounts, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 import { ProgressRing, IconClock, IconWallet, IconBank, IconPiggyBank, IconCreditCard, IconChevronRight } from './lib/icons.jsx';
 
@@ -202,8 +203,8 @@ export default function Overview({ householdId, onSelectAccount }) {
     }
   }
 
-  if (error) return <div style={{ color: 'var(--rust)' }}>Couldn't load overview: {error}</div>;
-  if (!accounts || !rules || !transactions) return <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>;
+  if (error) return <ErrorState message={`Couldn't load overview: ${error}`} />;
+  if (!accounts || !rules || !transactions) return <LoadingState />;
 
   const heroValue = horizon === 'payday' ? safeToSpend : projectedFreeCash;
   const heroMax = horizon === 'payday' ? cashOnHand : (cashOnHand + incomeThroughHorizon);
@@ -223,7 +224,7 @@ export default function Overview({ householdId, onSelectAccount }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 10 }}>
           <ProgressRing value={heroValue} max={heroMax} size={104} strokeWidth={10} color="#FFFFFF" trackColor="rgba(255,255,255,0.2)">
-            <div style={{ ...s.num, fontSize: 20, fontWeight: 700, color: '#FFFFFF', textAlign: 'center', lineHeight: 1.2 }}>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: '#FFFFFF', textAlign: 'center', lineHeight: 1.2 }}>
               {fmtCAD(heroValue)}
             </div>
           </ProgressRing>

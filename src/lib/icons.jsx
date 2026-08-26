@@ -140,6 +140,15 @@ export function IconTrendingUp({ color = 'currentColor' }) {
   );
 }
 
+export function IconTrendingDown({ color = 'currentColor' }) {
+  return (
+    <svg {...iconProps} stroke={color}>
+      <path d="M3 7l6 6 4-4 8 8" />
+      <path d="M15 17h6v-6" />
+    </svg>
+  );
+}
+
 export function IconReceipt({ color = 'currentColor' }) {
   return (
     <svg {...iconProps} stroke={color}>
