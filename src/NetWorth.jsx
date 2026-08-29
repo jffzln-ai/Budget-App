@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAccounts, getNetWorthItems, addNetWorthItem, removeNetWorthItem, computeLiveBalances } from './lib/queries.js';
+import { getAccounts, getNetWorthItems, addNetWorthItem, removeNetWorthItem, computeLiveBalances, getAccountDeletionImpact, deleteAccount } from './lib/queries.js';
 import { LoadingState, ErrorState } from './lib/states.jsx';
 
 const NET_WORTH_CATEGORIES = {
@@ -28,6 +28,9 @@ export default function NetWorth({ householdId }) {
   const [error, setError] = useState(null);
   const [form, setForm] = useState({ name: '', type: 'asset', category: 'Real Estate', value: '' });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { account, impact } | null
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   async function load() {
     try {
@@ -65,6 +68,31 @@ export default function NetWorth({ householdId }) {
     }
   }
 
+  async function startDeleteAccount(account) {
+    setError(null);
+    try {
+      const impact = await getAccountDeletionImpact(account.id);
+      setDeleteTarget({ account, impact });
+      setConfirmText('');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function confirmDeleteAccount() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await deleteAccount(deleteTarget.account.id);
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   if (error) return <ErrorState message={error} />;
   if (!accounts) return <LoadingState />;
 
@@ -97,9 +125,36 @@ export default function NetWorth({ householdId }) {
       <div style={{ ...s.card, marginBottom: 14 }}>
         <div style={s.label}>Accounts</div>
         {accounts.map(a => (
-          <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--line-soft)', fontSize: 13 }}>
-            <span>{a.name}</span>
-            <span style={{ ...s.num, fontWeight: 600, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
+          <div key={a.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line-soft)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, gap: 10 }}>
+              <span>{a.name}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ ...s.num, fontWeight: 600, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
+                <button onClick={() => startDeleteAccount(a)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline' }}>Delete</button>
+              </div>
+            </div>
+            {deleteTarget && deleteTarget.account.id === a.id && (
+              <div style={{ marginTop: 10, padding: 14, background: 'rgba(156,74,52,0.08)', border: '1px solid var(--rust)', borderRadius: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--rust)' }}>Delete "{a.name}" permanently?</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.6, marginBottom: 10 }}>
+                  This will permanently delete <strong>{deleteTarget.impact.transactions}</strong> transaction{deleteTarget.impact.transactions === 1 ? '' : 's'}
+                  {deleteTarget.impact.plannedTransactions > 0 && <> and <strong>{deleteTarget.impact.plannedTransactions}</strong> planned expense{deleteTarget.impact.plannedTransactions === 1 ? '' : 's'}</>}
+                  {deleteTarget.impact.recurringRules > 0 && <>, and remove <strong>{deleteTarget.impact.recurringRules}</strong> recurring bill{deleteTarget.impact.recurringRules === 1 ? '' : 's'} tracked on this account</>}.
+                  {a.plaid_item_id && <> This account is connected via Plaid - future syncs for it will stop once it's deleted.</>}
+                  {' '}This cannot be undone.
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 6 }}>Type the account name to confirm: <strong>{a.name}</strong></div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input style={{ ...s.field, flex: 1, minWidth: 140 }} value={confirmText} onChange={e => setConfirmText(e.target.value)} autoFocus />
+                  <button
+                    disabled={confirmText !== a.name || deleteBusy}
+                    onClick={confirmDeleteAccount}
+                    style={{ ...s.btn, background: 'var(--rust)', opacity: confirmText === a.name ? 1 : 0.5, cursor: confirmText === a.name ? 'pointer' : 'not-allowed' }}
+                  >{deleteBusy ? 'Deleting…' : 'Delete permanently'}</button>
+                  <button onClick={() => setDeleteTarget(null)} style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
