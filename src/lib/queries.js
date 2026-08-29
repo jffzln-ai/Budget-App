@@ -263,6 +263,35 @@ export async function linkTransfer(txnId1, txnId2) {
   if (e2) throw e2;
 }
 
+export async function getAccountDeletionImpact(accountId) {
+  const [txns, rules, planned] = await Promise.all([
+    supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('account_id', accountId),
+    supabase.from('recurring_rules').select('id', { count: 'exact', head: true }).eq('account_id', accountId),
+    supabase.from('planned_transactions').select('id', { count: 'exact', head: true }).eq('account_id', accountId),
+  ]);
+  if (txns.error) throw txns.error;
+  if (rules.error) throw rules.error;
+  if (planned.error) throw planned.error;
+  return {
+    transactions: txns.count || 0,
+    recurringRules: rules.count || 0,
+    plannedTransactions: planned.count || 0,
+  };
+}
+
+export async function deleteAccount(accountId) {
+  // recurring_rules.account_id is ON DELETE SET NULL, not CASCADE - left
+  // alone, a deleted account would leave orphaned rules with no account,
+  // which would just silently vanish from Upcoming rather than error, but
+  // it's still dead clutter in the table. Clean these up explicitly first.
+  const { error: rulesErr } = await supabase.from('recurring_rules').delete().eq('account_id', accountId);
+  if (rulesErr) throw rulesErr;
+  // transactions and planned_transactions are ON DELETE CASCADE, so deleting
+  // the account itself removes those automatically.
+  const { error } = await supabase.from('accounts').delete().eq('id', accountId);
+  if (error) throw error;
+}
+
 export function computeLiveBalances(accounts) {
   const balances = {};
   accounts.forEach(a => { balances[a.id] = a.current_balance; });
