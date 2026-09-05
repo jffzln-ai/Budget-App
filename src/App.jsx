@@ -9,7 +9,8 @@ import Allocations from './Allocations.jsx';
 import NetWorth from './NetWorth.jsx';
 import Reimbursements from './Reimbursements.jsx';
 import Import from './Import.jsx';
-import { IconHome, IconList, IconClock, IconMore, IconLayers, IconUpload, IconTrendingUp, IconReceipt } from './lib/icons.jsx';
+import { getConnections, syncItem } from './lib/plaidApi.js';
+import { IconHome, IconList, IconClock, IconMore, IconLayers, IconUpload, IconTrendingUp, IconReceipt, IconRefresh } from './lib/icons.jsx';
 
 const styles = {
   page: {
@@ -109,6 +110,34 @@ function DashboardScreen({ session, theme, setTheme }) {
   const [pendingAccountFilter, setPendingAccountFilter] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  async function handleSyncAll() {
+    setSyncing(true);
+    setSyncMsg(null);
+    setSyncError(null);
+    try {
+      const { connections } = await getConnections();
+      if (!connections.length) {
+        setSyncMsg('No banks connected yet.');
+        return;
+      }
+      let added = 0;
+      for (const c of connections) {
+        const result = await syncItem(c.id);
+        added += result.added;
+      }
+      setSyncMsg(added > 0 ? `Synced — ${added} new transaction${added === 1 ? '' : 's'}.` : 'Synced — up to date.');
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      setSyncError(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function goToAccountTransactions(accountId) {
     setPendingAccountFilter(accountId);
@@ -149,15 +178,29 @@ function DashboardScreen({ session, theme, setTheme }) {
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px 100px' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
           <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600, color: 'var(--ink)' }}>Ledger</div>
-          <div ref={menuRef} style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
-              onClick={() => setMenuOpen(v => !v)}
+              onClick={handleSyncAll}
+              disabled={syncing}
+              title="Sync connected bank accounts"
               style={{
-                width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--card)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 999,
+                border: '1px solid var(--line)', background: 'var(--card)', fontSize: 12.5, fontWeight: 600,
+                color: 'var(--ink)', cursor: syncing ? 'default' : 'pointer', opacity: syncing ? 0.6 : 1,
               }}
-            ><IconMore color="var(--ink)" /></button>
-            {menuOpen && (
+            >
+              <IconRefresh color="var(--pine)" />
+              {syncing ? 'Syncing…' : 'Sync accounts'}
+            </button>
+            <div ref={menuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                style={{
+                  width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--card)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+              ><IconMore color="var(--ink)" /></button>
+              {menuOpen && (
               <div style={{
                 position: 'absolute', right: 0, top: 46, background: 'var(--card)', borderRadius: 14,
                 boxShadow: '0 8px 28px rgba(27,33,29,0.14)', minWidth: 210, overflow: 'hidden', zIndex: 20,
@@ -201,8 +244,15 @@ function DashboardScreen({ session, theme, setTheme }) {
                 >Sign out</button>
               </div>
             )}
+            </div>
           </div>
         </header>
+
+        {(syncMsg || syncError) && (
+          <div style={{ fontSize: 12.5, color: syncError ? 'var(--rust)' : 'var(--pine)', marginTop: -12, marginBottom: 16 }}>
+            {syncError || syncMsg}
+          </div>
+        )}
 
         {activeMenuTab && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 12.5, color: 'var(--ink-soft)' }}>
@@ -214,13 +264,13 @@ function DashboardScreen({ session, theme, setTheme }) {
 
         {loadErr && <div style={{ color: 'var(--rust)' }}>Couldn't load your household: {loadErr}</div>}
         {!loadErr && !household && <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>}
-        {household && tab === 'overview' && <Overview householdId={household.householdId} onSelectAccount={goToAccountTransactions} />}
-        {household && tab === 'transactions' && <Transactions householdId={household.householdId} initialAccountFilter={pendingAccountFilter} onConsumeInitialFilter={() => setPendingAccountFilter(null)} />}
-        {household && tab === 'upcoming' && <Upcoming householdId={household.householdId} />}
-        {household && tab === 'networth' && <NetWorth householdId={household.householdId} />}
-        {household && tab === 'reimbursements' && <Reimbursements householdId={household.householdId} />}
-        {household && tab === 'allocations' && <Allocations householdId={household.householdId} />}
-        {household && tab === 'import' && <Import householdId={household.householdId} />}
+        {household && tab === 'overview' && <Overview key={refreshKey} householdId={household.householdId} onSelectAccount={goToAccountTransactions} />}
+        {household && tab === 'transactions' && <Transactions key={refreshKey} householdId={household.householdId} initialAccountFilter={pendingAccountFilter} onConsumeInitialFilter={() => setPendingAccountFilter(null)} />}
+        {household && tab === 'upcoming' && <Upcoming key={refreshKey} householdId={household.householdId} />}
+        {household && tab === 'networth' && <NetWorth key={refreshKey} householdId={household.householdId} />}
+        {household && tab === 'reimbursements' && <Reimbursements key={refreshKey} householdId={household.householdId} />}
+        {household && tab === 'allocations' && <Allocations key={refreshKey} householdId={household.householdId} />}
+        {household && tab === 'import' && <Import key={refreshKey} householdId={household.householdId} />}
       </div>
 
       <nav style={{
