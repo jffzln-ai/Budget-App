@@ -52,7 +52,7 @@ function accountVisual(type) {
   }
 }
 
-export default function Overview({ householdId, onSelectAccount }) {
+export default function Overview({ householdId, onSelectAccount, onViewSpending }) {
   const [accounts, setAccounts] = useState(null);
   const [rules, setRules] = useState(null);
   const [transactions, setTransactions] = useState(null);
@@ -278,7 +278,15 @@ export default function Overview({ householdId, onSelectAccount }) {
       </div>
 
       <div style={s.card}>
-        <div style={s.label}>Spending by category · {monthLabel(thisMonthYm)}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={s.label}>Spending by category · {monthLabel(thisMonthYm)}</div>
+          {onViewSpending && (
+            <button
+              onClick={onViewSpending}
+              style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}
+            >History &amp; search →</button>
+          )}
+        </div>
           {categorySpend.length === 0 && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>Nothing this month.</div>}
           {categorySpend.map(([cat, amt]) => {
             const budget = budgetByCategory[cat];

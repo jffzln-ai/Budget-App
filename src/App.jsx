@@ -108,6 +108,7 @@ function DashboardScreen({ session, theme, setTheme }) {
   const [loadErr, setLoadErr] = useState(null);
   const [tab, setTab] = useState('overview');
   const [pendingAccountFilter, setPendingAccountFilter] = useState(null);
+  const [pendingBreakdownOpen, setPendingBreakdownOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const [syncing, setSyncing] = useState(false);
@@ -141,6 +142,11 @@ function DashboardScreen({ session, theme, setTheme }) {
 
   function goToAccountTransactions(accountId) {
     setPendingAccountFilter(accountId);
+    setTab('transactions');
+  }
+
+  function goToSpendingBreakdown() {
+    setPendingBreakdownOpen(true);
     setTab('transactions');
   }
 
@@ -264,8 +270,17 @@ function DashboardScreen({ session, theme, setTheme }) {
 
         {loadErr && <div style={{ color: 'var(--rust)' }}>Couldn't load your household: {loadErr}</div>}
         {!loadErr && !household && <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>}
-        {household && tab === 'overview' && <Overview key={refreshKey} householdId={household.householdId} onSelectAccount={goToAccountTransactions} />}
-        {household && tab === 'transactions' && <Transactions key={refreshKey} householdId={household.householdId} initialAccountFilter={pendingAccountFilter} onConsumeInitialFilter={() => setPendingAccountFilter(null)} />}
+        {household && tab === 'overview' && <Overview key={refreshKey} householdId={household.householdId} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
+        {household && tab === 'transactions' && (
+          <Transactions
+            key={refreshKey}
+            householdId={household.householdId}
+            initialAccountFilter={pendingAccountFilter}
+            onConsumeInitialFilter={() => setPendingAccountFilter(null)}
+            initialBreakdownOpen={pendingBreakdownOpen}
+            onConsumeInitialBreakdownOpen={() => setPendingBreakdownOpen(false)}
+          />
+        )}
         {household && tab === 'upcoming' && <Upcoming key={refreshKey} householdId={household.householdId} />}
         {household && tab === 'networth' && <NetWorth key={refreshKey} householdId={household.householdId} />}
         {household && tab === 'reimbursements' && <Reimbursements key={refreshKey} householdId={household.householdId} />}

@@ -13,6 +13,11 @@ function fmtCAD(n) {
   const sign = n < 0 ? '−' : '+';
   return sign + '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// For always-positive magnitudes (category breakdown sums) - fmtCAD's leading
+// '+' is only meaningful for signed transaction amounts, not a total spent.
+function fmtAbsCAD(n) {
+  return '$' + Math.abs(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function fmtDate(iso) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -34,8 +39,38 @@ function monthLabel(ym) {
   const [y, m] = ym.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
 }
+function pad2(n) { return String(n).padStart(2, '0'); }
+function iso(y, m, d) { return `${y}-${pad2(m)}-${pad2(d)}`; }
 
-export default function Transactions({ householdId, initialAccountFilter, onConsumeInitialFilter }) {
+// Named ranges relative to today; specific months and 'custom' are handled separately.
+function periodRange(period, today) {
+  const [ty, tm] = today.split('-').map(Number);
+  switch (period) {
+    case 'this_month':
+      return { start: iso(ty, tm, 1), end: today };
+    case 'last_month': {
+      const m = tm === 1 ? 12 : tm - 1;
+      const y = tm === 1 ? ty - 1 : ty;
+      return { start: iso(y, m, 1), end: iso(y, m, new Date(y, m, 0).getDate()) };
+    }
+    case 'last_3_months':
+    case 'last_6_months':
+    case 'last_12_months': {
+      const n = { last_3_months: 3, last_6_months: 6, last_12_months: 12 }[period];
+      const d = new Date(ty, tm - 1, 1);
+      d.setMonth(d.getMonth() - (n - 1));
+      return { start: iso(d.getFullYear(), d.getMonth() + 1, 1), end: today };
+    }
+    case 'ytd':
+      return { start: iso(ty, 1, 1), end: today };
+    case 'last_year':
+      return { start: iso(ty - 1, 1, 1), end: iso(ty - 1, 12, 31) };
+    default:
+      return null;
+  }
+}
+
+export default function Transactions({ householdId, initialAccountFilter, onConsumeInitialFilter, initialBreakdownOpen, onConsumeInitialBreakdownOpen }) {
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
@@ -44,7 +79,11 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
   const [error, setError] = useState(null);
   const [q, setQ] = useState('');
   const [accountFilter, setAccountFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [period, setPeriod] = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [showTransfers, setShowTransfers] = useState(false);
   const [unmatchedOnly, setUnmatchedOnly] = useState(false);
   const [linkingId, setLinkingId] = useState(null);
@@ -88,6 +127,15 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAccountFilter]);
 
+  useEffect(() => {
+    if (initialBreakdownOpen) {
+      setBreakdownOpen(true);
+      setFiltersOpen(true);
+      if (onConsumeInitialBreakdownOpen) onConsumeInitialBreakdownOpen();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBreakdownOpen]);
+
   const accountsById = useMemo(() => {
     const map = {};
     (accounts || []).forEach(a => { map[a.id] = a; });
@@ -114,19 +162,67 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     return Array.from(new Set(transactions.map(t => ymKey(t.date)))).sort().reverse();
   }, [transactions]);
 
+  function matchesPeriod(t) {
+    if (period === 'all') return true;
+    if (period === 'pay_period') return lastPaydayDate && t.date >= lastPaydayDate;
+    if (period === 'custom') {
+      if (customFrom && t.date < customFrom) return false;
+      if (customTo && t.date > customTo) return false;
+      return true;
+    }
+    const range = periodRange(period, today);
+    if (range) return t.date >= range.start && t.date <= range.end;
+    return ymKey(t.date) === period;
+  }
+
   const filtered = useMemo(() => {
     if (!transactions) return [];
     return transactions
       .filter(t => accountFilter === 'all' || t.account_id === accountFilter)
+      .filter(t => categoryFilter === 'all' || t.category === categoryFilter)
       .filter(t => unmatchedOnly ? (t.is_transfer && t.needs_review) : (showTransfers || !t.is_transfer))
       .filter(t => !q || t.raw_description.toLowerCase().includes(q.toLowerCase()))
-      .filter(t => {
-        if (period === 'all') return true;
-        if (period === 'pay_period') return lastPaydayDate && t.date >= lastPaydayDate;
-        return ymKey(t.date) === period;
-      })
+      .filter(matchesPeriod)
       .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  }, [transactions, accountFilter, showTransfers, unmatchedOnly, q, period, lastPaydayDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, accountFilter, categoryFilter, showTransfers, unmatchedOnly, q, period, customFrom, customTo, lastPaydayDate, today]);
+
+  // Category totals for whatever account/date-range/search is active, independent of
+  // categoryFilter itself (that would otherwise collapse the breakdown to one row) and
+  // always excluding transfers, so "how much on X over Y" reads straight off this list.
+  const categoryBreakdown = useMemo(() => {
+    if (!transactions) return [];
+    const totals = {};
+    transactions
+      .filter(t => accountFilter === 'all' || t.account_id === accountFilter)
+      .filter(t => !t.is_transfer)
+      .filter(t => !q || t.raw_description.toLowerCase().includes(q.toLowerCase()))
+      .filter(matchesPeriod)
+      .forEach(t => {
+        if (t.amount >= 0) return;
+        totals[t.category] = (totals[t.category] || 0) + Math.abs(t.amount);
+      });
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, accountFilter, q, period, customFrom, customTo, lastPaydayDate, today]);
+  const categoryBreakdownTotal = categoryBreakdown.reduce((sum, [, amt]) => sum + amt, 0);
+  const maxCategoryBreakdown = categoryBreakdown.length ? categoryBreakdown[0][1] : 1;
+
+  const periodLabel = useMemo(() => {
+    switch (period) {
+      case 'all': return 'all time';
+      case 'pay_period': return 'this pay period';
+      case 'this_month': return 'this month';
+      case 'last_month': return 'last month';
+      case 'last_3_months': return 'last 3 months';
+      case 'last_6_months': return 'last 6 months';
+      case 'last_12_months': return 'last 12 months';
+      case 'ytd': return 'year to date';
+      case 'last_year': return String(Number(today.slice(0, 4)) - 1);
+      case 'custom': return (customFrom || customTo) ? `${customFrom || '…'} to ${customTo || '…'}` : 'custom range';
+      default: return monthLabel(period);
+    }
+  }, [period, customFrom, customTo, today]);
 
   // Full unmatched set (not filtered) so a candidate on a different account
   // is still findable even if the current filters would otherwise hide it.
@@ -233,7 +329,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     }
   }
 
-  useEffect(() => { setSelectedIds(new Set()); }, [accountFilter, period, q, showTransfers, unmatchedOnly]);
+  useEffect(() => { setSelectedIds(new Set()); }, [accountFilter, categoryFilter, period, customFrom, customTo, q, showTransfers, unmatchedOnly]);
 
   function toggleSelected(id) {
     setSelectedIds(prev => {
@@ -322,7 +418,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     }
   }
 
-  const activeFilterCount = [accountFilter !== 'all', period !== 'all', showTransfers, unmatchedOnly].filter(Boolean).length;
+  const activeFilterCount = [accountFilter !== 'all', categoryFilter !== 'all', period !== 'all', showTransfers, unmatchedOnly].filter(Boolean).length;
 
   if (error) return <ErrorState message={`Couldn't load transactions: ${error}`} />;
   if (!transactions || !accounts) return <LoadingState label="Loading transactions…" />;
@@ -354,11 +450,34 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
               <option value="all">All accounts</option>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
+            <select style={s.field} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+              <option value="all">All categories</option>
+              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <select style={s.field} value={period} onChange={e => setPeriod(e.target.value)}>
               <option value="all">All time</option>
               {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
-              {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+              <option value="this_month">This month</option>
+              <option value="last_month">Last month</option>
+              <option value="last_3_months">Last 3 months</option>
+              <option value="last_6_months">Last 6 months</option>
+              <option value="last_12_months">Last 12 months</option>
+              <option value="ytd">Year to date</option>
+              <option value="last_year">Last year ({Number(today.slice(0, 4)) - 1})</option>
+              <option value="custom">Custom range…</option>
+              {availableMonths.length > 0 && (
+                <optgroup label="Specific month">
+                  {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+                </optgroup>
+              )}
             </select>
+            {period === 'custom' && (
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="date" style={s.field} value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+                <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>to</span>
+                <input type="date" style={s.field} value={customTo} onChange={e => setCustomTo(e.target.value)} />
+              </span>
+            )}
             <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
               <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
               Show internal transfers
@@ -373,9 +492,35 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
           <button onClick={() => setShowManageCategories(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Manage categories</button>
+          <button onClick={() => setBreakdownOpen(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>{breakdownOpen ? 'Hide category breakdown' : 'Show category breakdown'}</button>
           <button onClick={exportCsv} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline', marginLeft: 'auto' }}>Export CSV</button>
         </div>
       </div>
+
+      {breakdownOpen && (
+        <div style={{ padding: 16, borderBottom: '1px solid var(--line)', background: CREAM_TINT }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
+            <span>Spending by category · {periodLabel}{accountFilter !== 'all' ? ` · ${accountsById[accountFilter]?.name}` : ''}{q ? ` · "${q}"` : ''}</span>
+            <span style={s.num}>{fmtAbsCAD(categoryBreakdownTotal)}</span>
+          </div>
+          {categoryBreakdown.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>No expenses in this range.</div>}
+          {categoryBreakdown.map(([cat, amt]) => (
+            <div key={cat} style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 4 }}>
+                <span
+                  onClick={() => setCategoryFilter(cat === categoryFilter ? 'all' : cat)}
+                  style={{ cursor: 'pointer', fontWeight: cat === categoryFilter ? 700 : 500, textDecoration: 'underline dotted', textDecorationColor: 'var(--ink-soft)' }}
+                  title="Filter the list to this category"
+                >{cat}</span>
+                <span style={{ ...s.num, fontWeight: 700 }}>{fmtAbsCAD(amt)}</span>
+              </div>
+              <div style={{ height: 6, background: 'var(--pine-soft)', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.min((amt / maxCategoryBreakdown) * 100, 100)}%`, background: 'var(--pine)', borderRadius: 6 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: CREAM_TINT }}>
         <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
