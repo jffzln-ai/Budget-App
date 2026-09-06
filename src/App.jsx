@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient.js';
 import { getHousehold } from './lib/queries.js';
-import { THEMES, applyTheme, getStoredTheme, setStoredTheme } from './lib/themes.js';
+import { THEMES, applyTheme, getStoredTheme, setStoredTheme, isModernTheme } from './lib/themes.js';
 import Overview from './Overview.jsx';
 import Transactions from './Transactions.jsx';
 import Upcoming from './Upcoming.jsx';
@@ -102,6 +102,7 @@ const MENU_TABS = [
   { key: 'allocations', label: 'Allocations', Icon: IconLayers },
   { key: 'import', label: 'Import', Icon: IconUpload },
 ];
+const ALL_TABS = [...CORE_TABS, ...MENU_TABS];
 
 function DashboardScreen({ session, theme, setTheme }) {
   const [household, setHousehold] = useState(null);
@@ -178,6 +179,99 @@ function DashboardScreen({ session, theme, setTheme }) {
   }
 
   const activeMenuTab = MENU_TABS.find(t => t.key === tab);
+  const isModern = isModernTheme(theme);
+  const activeLabel = ALL_TABS.find(t => t.key === tab)?.label || 'Overview';
+
+  const pageContent = (
+    <>
+      {loadErr && <div style={{ color: 'var(--rust)' }}>Couldn't load your household: {loadErr}</div>}
+      {!loadErr && !household && <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>}
+      {household && tab === 'overview' && <Overview key={refreshKey} householdId={household.householdId} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
+      {household && tab === 'transactions' && (
+        <Transactions
+          key={refreshKey}
+          householdId={household.householdId}
+          initialAccountFilter={pendingAccountFilter}
+          onConsumeInitialFilter={() => setPendingAccountFilter(null)}
+          initialBreakdownOpen={pendingBreakdownOpen}
+          onConsumeInitialBreakdownOpen={() => setPendingBreakdownOpen(false)}
+        />
+      )}
+      {household && tab === 'upcoming' && <Upcoming key={refreshKey} householdId={household.householdId} />}
+      {household && tab === 'networth' && <NetWorth key={refreshKey} householdId={household.householdId} />}
+      {household && tab === 'reimbursements' && <Reimbursements key={refreshKey} householdId={household.householdId} />}
+      {household && tab === 'allocations' && <Allocations key={refreshKey} householdId={household.householdId} />}
+      {household && tab === 'import' && <Import key={refreshKey} householdId={household.householdId} />}
+    </>
+  );
+
+  // The "Modernist redesign" concept: a persistent sidebar (all tabs always visible,
+  // no hamburger overflow) instead of the classic header + bottom-nav shell. Content
+  // panels below are the exact same components either way - only the chrome differs -
+  // so switching designs can never lose functionality or leave the two out of sync.
+  if (isModern) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'grid', gridTemplateColumns: '210px 1fr' }}>
+        <aside style={{ background: 'var(--sidebar-bg)', color: 'var(--sidebar-text)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', padding: '0 10px' }}>LEDGER</div>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {ALL_TABS.map(({ key, label }) => {
+              const active = tab === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  style={{
+                    textAlign: 'left', padding: '9px 10px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: active ? 'var(--pine)' : 'transparent', color: active ? 'var(--sidebar-bg)' : 'var(--sidebar-text-soft)',
+                  }}
+                >{label}</button>
+              );
+            })}
+          </nav>
+          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--sidebar-text-soft)', padding: '0 10px' }}>Look</div>
+            <div style={{ display: 'flex', gap: 8, padding: '0 10px' }}>
+              {Object.entries(THEMES).filter(([, t]) => t.layout === 'modern').map(([key, t]) => (
+                <button
+                  key={key}
+                  onClick={() => handleThemeChange(key)}
+                  title={t.label}
+                  style={{
+                    width: 22, height: 22, padding: 2, boxSizing: 'border-box', cursor: 'pointer', background: 'none',
+                    border: theme === key ? '2px solid var(--pine)' : '2px solid transparent',
+                  }}
+                ><span style={{ display: 'block', width: '100%', height: '100%', background: t.pine }} /></button>
+              ))}
+            </div>
+            <button
+              onClick={() => handleThemeChange('colorful')}
+              style={{ background: 'none', border: '1px solid var(--sidebar-text-soft)', color: 'var(--sidebar-text)', padding: '7px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}
+            >← Back to classic design</button>
+            <div style={{ fontSize: 11, color: 'var(--sidebar-text-soft)', padding: '4px 10px 0' }}>{session.user.email}</div>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              style={{ background: 'none', border: 'none', color: 'var(--sidebar-text-soft)', fontSize: 11, cursor: 'pointer', textAlign: 'left', padding: 0 }}
+            >Sign out</button>
+          </div>
+        </aside>
+        <main style={{ padding: '32px 32px 60px', color: 'var(--ink)', minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ fontWeight: 800, fontSize: 22 }}>{activeLabel}</div>
+            <button
+              onClick={handleSyncAll}
+              disabled={syncing}
+              style={{ border: '1px solid var(--line)', background: 'none', padding: '8px 16px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', cursor: syncing ? 'default' : 'pointer', color: 'var(--ink)' }}
+            >{syncing ? 'Syncing…' : 'Sync accounts'}</button>
+          </div>
+          {(syncMsg || syncError) && (
+            <div style={{ fontSize: 12.5, color: syncError ? 'var(--rust)' : 'var(--pine)', marginBottom: 20 }}>{syncError || syncMsg}</div>
+          )}
+          {pageContent}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: "'Inter', sans-serif" }}>
@@ -225,8 +319,8 @@ function DashboardScreen({ session, theme, setTheme }) {
                 ))}
                 <div style={{ height: 1, background: 'var(--line)' }} />
                 <div style={{ padding: '10px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Appearance</div>
-                <div style={{ display: 'flex', gap: 6, padding: '4px 16px 10px' }}>
-                  {Object.entries(THEMES).map(([key, t]) => (
+                <div style={{ display: 'flex', gap: 6, padding: '4px 16px 2px' }}>
+                  {Object.entries(THEMES).filter(([, t]) => t.layout === 'classic').map(([key, t]) => (
                     <button
                       key={key}
                       onClick={() => handleThemeChange(key)}
@@ -238,6 +332,23 @@ function DashboardScreen({ session, theme, setTheme }) {
                       }}
                     >
                       <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: '50%', background: t.card, border: `1px solid ${t.line}`, boxShadow: `inset 0 0 0 6px ${t.pine}` }} />
+                    </button>
+                  ))}
+                </div>
+                <div style={{ padding: '8px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>New design (concept)</div>
+                <div style={{ display: 'flex', gap: 6, padding: '4px 16px 10px' }}>
+                  {Object.entries(THEMES).filter(([, t]) => t.layout === 'modern').map(([key, t]) => (
+                    <button
+                      key={key}
+                      onClick={() => { handleThemeChange(key); setMenuOpen(false); }}
+                      title={t.label}
+                      style={{
+                        width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
+                        border: theme === key ? '2px solid var(--pine)' : '2px solid transparent',
+                        padding: 0, background: 'none',
+                      }}
+                    >
+                      <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: '50%', background: t.bg, border: `1px solid ${t.ink}`, boxShadow: `inset 0 0 0 6px ${t.pine}` }} />
                     </button>
                   ))}
                 </div>
@@ -268,24 +379,7 @@ function DashboardScreen({ session, theme, setTheme }) {
           </div>
         )}
 
-        {loadErr && <div style={{ color: 'var(--rust)' }}>Couldn't load your household: {loadErr}</div>}
-        {!loadErr && !household && <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>}
-        {household && tab === 'overview' && <Overview key={refreshKey} householdId={household.householdId} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
-        {household && tab === 'transactions' && (
-          <Transactions
-            key={refreshKey}
-            householdId={household.householdId}
-            initialAccountFilter={pendingAccountFilter}
-            onConsumeInitialFilter={() => setPendingAccountFilter(null)}
-            initialBreakdownOpen={pendingBreakdownOpen}
-            onConsumeInitialBreakdownOpen={() => setPendingBreakdownOpen(false)}
-          />
-        )}
-        {household && tab === 'upcoming' && <Upcoming key={refreshKey} householdId={household.householdId} />}
-        {household && tab === 'networth' && <NetWorth key={refreshKey} householdId={household.householdId} />}
-        {household && tab === 'reimbursements' && <Reimbursements key={refreshKey} householdId={household.householdId} />}
-        {household && tab === 'allocations' && <Allocations key={refreshKey} householdId={household.householdId} />}
-        {household && tab === 'import' && <Import key={refreshKey} householdId={household.householdId} />}
+        {pageContent}
       </div>
 
       <nav style={{

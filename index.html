@@ -11,8 +11,29 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Ledger" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
   <title>Ledger</title>
+  <style>
+    /* "Modernist" redesign layout: sharp corners, flat bordered surfaces instead of
+       shadowed rounded cards, Archivo throughout instead of Fraunces/IBM Plex Mono.
+       Scoped to [data-layout="modern"] (set by applyTheme in lib/themes.js) so it
+       never touches the classic layout's components or styles. */
+    html[data-layout="modern"] { font-family: 'Archivo', system-ui, sans-serif; }
+    html[data-layout="modern"] *,
+    html[data-layout="modern"] *::before,
+    html[data-layout="modern"] *::after {
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+    html[data-layout="modern"] [style*="box-shadow"] {
+      border: 1px solid var(--line);
+    }
+    html[data-layout="modern"] [style*="Fraunces"],
+    html[data-layout="modern"] [style*="IBM Plex Mono"],
+    html[data-layout="modern"] [style*="Inter"] {
+      font-family: 'Archivo', system-ui, sans-serif !important;
+    }
+  </style>
 </head>
 <body style="margin:0;">
   <div id="root"></div>
