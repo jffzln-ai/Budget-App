@@ -10,7 +10,7 @@ import NetWorth from './NetWorth.jsx';
 import Reimbursements from './Reimbursements.jsx';
 import Import from './Import.jsx';
 import { getConnections, syncItem } from './lib/plaidApi.js';
-import { IconHome, IconList, IconClock, IconMore, IconLayers, IconUpload, IconTrendingUp, IconReceipt, IconRefresh } from './lib/icons.jsx';
+import { IconHome, IconList, IconClock, IconMore, IconMenu, IconLayers, IconUpload, IconTrendingUp, IconReceipt, IconRefresh } from './lib/icons.jsx';
 
 const styles = {
   page: {
@@ -112,6 +112,7 @@ function DashboardScreen({ session, theme, setTheme }) {
   const [pendingBreakdownOpen, setPendingBreakdownOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState(null);
   const [syncError, setSyncError] = useState(null);
@@ -211,8 +212,9 @@ function DashboardScreen({ session, theme, setTheme }) {
   // so switching designs can never lose functionality or leave the two out of sync.
   if (isModern) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'grid', gridTemplateColumns: '210px 1fr' }}>
-        <aside style={{ background: 'var(--sidebar-bg)', color: 'var(--sidebar-text)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div className="modern-shell">
+        <div className={`modern-sidebar-backdrop${sidebarOpen ? ' is-open' : ''}`} onClick={() => setSidebarOpen(false)} />
+        <aside className={`modern-sidebar${sidebarOpen ? ' is-open' : ''}`} style={{ background: 'var(--sidebar-bg)', color: 'var(--sidebar-text)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', padding: '0 10px' }}>LEDGER</div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {ALL_TABS.map(({ key, label }) => {
@@ -220,7 +222,7 @@ function DashboardScreen({ session, theme, setTheme }) {
               return (
                 <button
                   key={key}
-                  onClick={() => setTab(key)}
+                  onClick={() => { setTab(key); setSidebarOpen(false); }}
                   style={{
                     textAlign: 'left', padding: '9px 10px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                     background: active ? 'var(--pine)' : 'transparent', color: active ? 'var(--sidebar-bg)' : 'var(--sidebar-text-soft)',
@@ -257,7 +259,15 @@ function DashboardScreen({ session, theme, setTheme }) {
         </aside>
         <main style={{ padding: '32px 32px 60px', color: 'var(--ink)', minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ fontWeight: 800, fontSize: 22 }}>{activeLabel}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                className="modern-hamburger"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+                style={{ alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, border: '1px solid var(--line)', background: 'none', cursor: 'pointer', color: 'var(--ink)' }}
+              ><IconMenu color="var(--ink)" /></button>
+              <div style={{ fontWeight: 800, fontSize: 22 }}>{activeLabel}</div>
+            </div>
             <button
               onClick={handleSyncAll}
               disabled={syncing}
