@@ -1,7 +1,7 @@
 import { getAuthedHousehold } from '../_lib/auth.js';
 import { plaidClient } from '../_lib/plaidClient.js';
 import { categorizeRaw } from '../../src/lib/categorize.js';
-import { matchTransfers, detectNewRecurring } from '../../src/lib/reconcile.js';
+import { matchTransfers, detectNewRecurring, advanceRulesFromTransactions } from '../../src/lib/reconcile.js';
 
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, ' '); }
@@ -109,6 +109,12 @@ export default async function handler(req, res) {
     ]);
     const tagsById = {};
     (tagRows || []).forEach(t => { (tagsById[t.transaction_id] = tagsById[t.transaction_id] || []).push(t.tag); });
+    const ruleAdvances = advanceRulesFromTransactions(existingRules || [], allTxns || []);
+    for (const u of ruleAdvances) {
+      await supabaseAdmin.from('recurring_rules')
+        .update({ last_date: u.last_date, next_expected_date: u.next_expected_date }).eq('id', u.id);
+    }
+
     const existingKeys = new Set();
     (existingRules || []).forEach(r => (r.match_keys || []).forEach(mk => existingKeys.add(r.account_id + '::' + normalizeKey(mk))));
     const newRuleCandidates = detectNewRecurring(allTxns || [], tagsById, existingKeys);
@@ -119,6 +125,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       added: toInsert.length, modified: modified.length, removed: removed.length,
       transferMatches: transferMatches.length / 2, newRecurringPatterns: newRuleCandidates.length,
+      advancedRules: ruleAdvances.length,
     });
   } catch (err) {
     res.status(400).json({ error: err.response?.data?.error_message || err.message });

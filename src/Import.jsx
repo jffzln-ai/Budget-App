@@ -3,12 +3,12 @@ import {
   getAccounts, getExistingTransactionKeys, insertTransactions,
   getUnmatchedTransferCandidates, applyTransferMatches,
   getAllTransactions, getTransactionTags, getRecurringRules, insertRecurringRuleCandidates,
-  getCategoryRules,
+  getCategoryRules, advanceRuleSchedule,
 } from './lib/queries.js';
 import { LoadingState, ErrorState } from './lib/states.jsx';
 import { detectCsvFormat, parseCsvRows } from './lib/csvParser.js';
 import { categorizeRaw } from './lib/categorize.js';
-import { matchTransfers, detectNewRecurring } from './lib/reconcile.js';
+import { matchTransfers, detectNewRecurring, advanceRulesFromTransactions } from './lib/reconcile.js';
 import PlaidConnect from './PlaidConnect.jsx';
 
 function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, ' '); }
@@ -146,6 +146,10 @@ export default function Import({ householdId }) {
       const [allTxns, tagsById, existingRules] = await Promise.all([
         getAllTransactions(householdId), getTransactionTags(householdId), getRecurringRules(householdId),
       ]);
+      for (const u of advanceRulesFromTransactions(existingRules, allTxns)) {
+        await advanceRuleSchedule(u.id, u.last_date, u.next_expected_date);
+      }
+
       const existingKeys = new Set();
       existingRules.forEach(r => (r.match_keys || []).forEach(mk => existingKeys.add(r.account_id + '::' + normalizeKey(mk))));
       const newRuleCandidates = detectNewRecurring(allTxns, tagsById, existingKeys);

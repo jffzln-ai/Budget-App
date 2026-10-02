@@ -65,6 +65,47 @@ function inferCadence(sortedDates) {
   return 'annual';
 }
 
+function addCadence(isoDate, cadence) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const months = { monthly: 1, quarterly: 3, annual: 12 }[cadence];
+  if (months) {
+    // Calendar-month stepping keeps a "1st of the month" bill on the 1st; a flat
+    // 30-day step would drift a day or two earlier every few months.
+    const target = new Date(Date.UTC(y, m - 1 + months, 1));
+    const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(d, lastDay));
+    return target.toISOString().slice(0, 10);
+  }
+  const step = CADENCE_STEP_DAYS[cadence] || 30;
+  return new Date(Date.UTC(y, m - 1, d) + step * 86400000).toISOString().slice(0, 10);
+}
+
+// When a transaction matching an existing rule's match_keys posts, that
+// occurrence has happened - move the rule's last_date forward and project the
+// next one from it. Without this, a rule keeps its original next_expected_date
+// forever and Upcoming keeps listing bills that have already been paid.
+export function advanceRulesFromTransactions(rules, transactions) {
+  const latestByKey = {};
+  transactions.forEach(t => {
+    if (t.is_transfer) return;
+    const key = t.account_id + '::' + normalizeKey(t.raw_description);
+    if (!latestByKey[key] || t.date > latestByKey[key]) latestByKey[key] = t.date;
+  });
+
+  const updates = [];
+  rules.forEach(rule => {
+    if (rule.status === 'dismissed') return;
+    let latest = null;
+    (rule.match_keys || []).forEach(mk => {
+      const d = latestByKey[rule.account_id + '::' + normalizeKey(mk)];
+      if (d && (!latest || d > latest)) latest = d;
+    });
+    if (!latest || (rule.last_date && latest <= rule.last_date)) return;
+    updates.push({ id: rule.id, last_date: latest, next_expected_date: addCadence(latest, rule.cadence) });
+  });
+  return updates;
+}
+
 // A real recurring bill has two properties casual repeat shopping doesn't:
 // it happens at a roughly fixed interval, and it costs roughly the same
 // amount each time. Requiring both (not just "same description twice") is

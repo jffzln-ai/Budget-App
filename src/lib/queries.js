@@ -194,6 +194,12 @@ export async function dismissRule(ruleId) {
   if (error) throw error;
 }
 
+export async function advanceRuleSchedule(ruleId, lastDate, nextExpectedDate) {
+  const { error } = await supabase.from('recurring_rules')
+    .update({ last_date: lastDate, next_expected_date: nextExpectedDate }).eq('id', ruleId);
+  if (error) throw error;
+}
+
 export async function updateRuleAmount(ruleId, amount) {
   const { error } = await supabase.from('recurring_rules').update({ expected_amount: amount }).eq('id', ruleId);
   if (error) throw error;
