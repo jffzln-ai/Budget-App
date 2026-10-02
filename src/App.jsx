@@ -257,7 +257,7 @@ function DashboardScreen({ session, theme, setTheme }) {
             >Sign out</button>
           </div>
         </aside>
-        <main style={{ padding: '32px 32px 60px', color: 'var(--ink)', minWidth: 0 }}>
+        <main className="modern-main" style={{ padding: '32px 32px 60px', color: 'var(--ink)', minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
@@ -279,6 +279,24 @@ function DashboardScreen({ session, theme, setTheme }) {
           )}
           {pageContent}
         </main>
+        <nav className="modern-bottom-nav">
+          {CORE_TABS.map(({ key, label, Icon }) => {
+            const active = tab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 14px',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <Icon color={active ? 'var(--pine)' : 'var(--sidebar-text-soft)'} />
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: active ? 'var(--pine)' : 'var(--sidebar-text-soft)' }}>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
     );
   }
