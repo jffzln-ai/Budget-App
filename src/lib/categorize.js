@@ -39,6 +39,21 @@ const CATEGORY_RULES = [
   [/RELIANCEHOMECOMFORT/i, 'Utilities', null],
   [/WESTIN HOTEL/i, 'Travel', null],
   [/^AMAZON$/i, 'Shopping', null],
+  // Added Oct 2026 (batch 2): reviewed one by one
+  [/^NEO FINANCIAL MSP/i, 'Emergency Fund', null],
+  [/TBJ CONCESSIONS|^NOMAD\b|^USAT_WT/i, 'Dining', null],
+  [/^EDGE BENEFITS MSP/i, 'Insurance', null],
+  [/^BEST BUY$/i, 'Electronics', null],
+  [/^INTEREST CREDIT$/i, 'Interest Income', null],
+  [/^FRESH AIR$/i, 'Shopping', null],
+  [/^MNP LLP|^PUROLATOR/i, 'Work Expense', null],
+  [/TD ATM W\/D/i, 'Cash Withdrawal', null],
+  [/^JAYS SHOP/i, 'Entertainment & Media', null],
+  [/^THUNDER BAY INTERNATIONAL|^CITY ISLAND MARKET/i, 'Travel', null],
+  [/^FIRST CHOICE HA/i, 'Personal Care', null],
+  [/^INTERCITY INDUS|^MEMORIAL HOME H/i, 'Home & Retail', null],
+  [/^WIKIPEDIA|WIKIMED/i, 'Donations', null],
+  [/^SASI WATER/i, 'Groceries & Pharmacy', null],
   [/^SEND E-TFR|^E-TRANSFER/i, 'Uncategorized', 'uncategorized_transfer'],
 ];
 
@@ -68,6 +83,11 @@ export function categorizeRaw(raw_description, amount, account) {
   if (isTransferCandidate(raw_description)) {
     const slug = account.name === 'Savings' ? 'savings' : account.name === 'BS Savings' ? 'bs_savings' : account.name === 'New Atlantic' ? 'new_atlantic' : null;
     return { is_transfer: true, needs_review: true, category: transferSubcategory(raw_description, account.type, slug), tags: [] };
+  }
+  // Inbound household transfer: the other leg isn't in any tracked account, so it
+  // can't be matched - flag as transfer (excluded from spending) but don't queue for review.
+  if (/^ROYAL BANK OF CANADA$/i.test(raw_description)) {
+    return { is_transfer: true, needs_review: false, category: 'Transfers from Jenn', tags: [] };
   }
   for (const [pattern, cat, tag] of CATEGORY_RULES) {
     if (pattern.test(raw_description)) {
