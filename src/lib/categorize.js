@@ -27,6 +27,18 @@ const CATEGORY_RULES = [
   [/CITY OF TBAY - RECREATION/i, 'Recreation', null],
   [/FAMOUS PLAYER/i, 'Entertainment & Media', null],
   [/TD ATM DEP/i, 'Cash Deposit', null],
+  // Added Oct 2026: merchants that were landing in Uncategorized
+  [/PETRO-CANADA|MOBIL@/i, 'Auto - Fuel', null],
+  [/REAL CDN SUPERS|REXALL/i, 'Groceries & Pharmacy', null],
+  [/DOMINO'?S|THAI KITCHEN|^TST-|AMSTERDAM BREWHOUSE|BEERTOWN|CAFE LANDWER|THE COMMISSARY/i, 'Dining', null],
+  [/CINEPLEX|KOBO EBOOKS/i, 'Entertainment & Media', null],
+  [/SUPABASE|TWILIO/i, 'Subscriptions', null],
+  [/HOMEDEPOT|DOLLARAMA/i, 'Home & Retail', null],
+  [/MC CARTNEY DENT|THUNDER BAY REG\b/i, 'Health', null],
+  [/WITHDRAWAL FEES/i, 'Bank Fees', null],
+  [/RELIANCEHOMECOMFORT/i, 'Utilities', null],
+  [/WESTIN HOTEL/i, 'Travel', null],
+  [/^AMAZON$/i, 'Shopping', null],
   [/^SEND E-TFR|^E-TRANSFER/i, 'Uncategorized', 'uncategorized_transfer'],
 ];
 
