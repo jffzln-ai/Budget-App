@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './lib/supabaseClient.js';
 import { getHousehold } from './lib/queries.js';
-import { THEMES, applyTheme, getStoredTheme, setStoredTheme, isModernTheme } from './lib/themes.js';
+import { THEME_PREFS, applyTheme, getStoredTheme, setStoredTheme, watchSystemTheme } from './lib/themes.js';
+import { ToastProvider, useToast } from './lib/toast.jsx';
+import { LoadingState, ErrorState } from './lib/states.jsx';
 import Overview from './Overview.jsx';
 import Transactions from './Transactions.jsx';
 import Upcoming from './Upcoming.jsx';
@@ -10,34 +12,7 @@ import NetWorth from './NetWorth.jsx';
 import Reimbursements from './Reimbursements.jsx';
 import Import from './Import.jsx';
 import { getConnections, syncItem } from './lib/plaidApi.js';
-import { IconHome, IconList, IconClock, IconMore, IconMenu, IconLayers, IconUpload, IconTrendingUp, IconReceipt, IconRefresh } from './lib/icons.jsx';
-
-const styles = {
-  page: {
-    minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', fontFamily: "'Inter', sans-serif", padding: 20,
-  },
-  card: {
-    background: 'var(--card)', borderRadius: 8, padding: 32, width: 360, maxWidth: '100%',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
-  },
-  title: { fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 },
-  sub: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 20 },
-  field: {
-    width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 4,
-    fontSize: 14, marginBottom: 10, boxSizing: 'border-box',
-  },
-  button: {
-    width: '100%', padding: '11px 12px', background: 'var(--pine)', color: 'var(--hero-text)', border: 'none',
-    borderRadius: 4, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 6,
-  },
-  linkBtn: {
-    width: '100%', padding: '8px', background: 'none', border: 'none', color: 'var(--ink-soft)',
-    fontSize: 12.5, cursor: 'pointer', marginTop: 10, textDecoration: 'underline',
-  },
-  error: { color: 'var(--rust)', fontSize: 12.5, marginBottom: 10 },
-  num: { fontFamily: "'IBM Plex Mono', monospace" },
-};
+import { IconHome, IconList, IconClock, IconGrid, IconLayers, IconUpload, IconTrendingUp, IconReceipt, IconRefresh, IconClose, IconChevronRight } from './lib/icons.jsx';
 
 function AuthScreen() {
   const [mode, setMode] = useState('signin');
@@ -65,25 +40,27 @@ function AuthScreen() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.title}>Ledger</div>
-        <div style={styles.sub}>{mode === 'signin' ? 'Sign in to your household' : 'Create your account'}</div>
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px)' }}>
+      <div className="card" style={{ width: 360, maxWidth: '100%', padding: 32, gap: 16, boxShadow: 'var(--e2)' }}>
+        <div>
+          <div className="t-28 display">Ledger</div>
+          <div className="t-14 muted">{mode === 'signin' ? 'Sign in to your household' : 'Create your account'}</div>
+        </div>
         {signedUpMsg ? (
-          <div style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.5 }}>
-            Account created. If email confirmation is on for this project, check your inbox before signing in.
-          </div>
+          <div className="t-14">Account created. If email confirmation is on for this project, check your inbox before signing in.</div>
         ) : (
-          <form onSubmit={submit}>
-            {error && <div style={styles.error}>{error}</div>}
-            <input style={styles.field} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
-            <input style={styles.field} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
-            <button style={styles.button} type="submit" disabled={loading}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {error && <div className="field-error" role="alert">{error}</div>}
+            <label className="sr-only" htmlFor="auth-email">Email</label>
+            <input id="auth-email" className="input" type="email" placeholder="Email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
+            <label className="sr-only" htmlFor="auth-password">Password</label>
+            <input id="auth-password" className="input" type="password" placeholder="Password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
+            <button className="btn btn-primary btn-block" type="submit" disabled={loading} style={{ marginTop: 4 }}>
               {loading ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
             </button>
           </form>
         )}
-        <button style={styles.linkBtn} onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setSignedUpMsg(false); }}>
+        <button className="btn btn-quiet btn-sm" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setSignedUpMsg(false); }}>
           {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
         </button>
       </div>
@@ -91,41 +68,56 @@ function AuthScreen() {
   );
 }
 
-const CORE_TABS = [
+// Four destinations in the tab bar plus More; the sidebar shows everything.
+const TAB_BAR = [
   { key: 'overview', label: 'Overview', Icon: IconHome },
   { key: 'transactions', label: 'Transactions', Icon: IconList },
   { key: 'upcoming', label: 'Upcoming', Icon: IconClock },
+  { key: 'networth', label: 'Net worth', Icon: IconTrendingUp },
 ];
-const MENU_TABS = [
-  { key: 'networth', label: 'Net Worth', Icon: IconTrendingUp },
+const MORE_TABS = [
   { key: 'reimbursements', label: 'Reimbursements', Icon: IconReceipt },
   { key: 'allocations', label: 'Allocations', Icon: IconLayers },
   { key: 'import', label: 'Import', Icon: IconUpload },
 ];
-const ALL_TABS = [...CORE_TABS, ...MENU_TABS];
+const ALL_TABS = [...TAB_BAR, ...MORE_TABS];
 
-function DashboardScreen({ session, theme, setTheme }) {
+function todayLabel() {
+  return new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function ThemeSwitch({ theme, onChange, idPrefix }) {
+  return (
+    <div className="segmented" role="group" aria-labelledby={`${idPrefix}-appearance`}>
+      {THEME_PREFS.map(p => (
+        <button key={p.key} type="button" aria-pressed={theme === p.key} onClick={() => onChange(p.key)}>{p.label}</button>
+      ))}
+    </div>
+  );
+}
+
+function DashboardScreen({ session, theme, onThemeChange }) {
+  const toast = useToast();
   const [household, setHousehold] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [tab, setTab] = useState('overview');
   const [pendingAccountFilter, setPendingAccountFilter] = useState(null);
   const [pendingBreakdownOpen, setPendingBreakdownOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState(null);
-  const [syncError, setSyncError] = useState(null);
+  // Bumped after a sync. Pages reload their data in place when it changes,
+  // instead of being remounted (which flashed the whole page back to loading).
   const [refreshKey, setRefreshKey] = useState(0);
+  const moreBtnRef = useRef(null);
+  const sheetRef = useRef(null);
+  const sheetCloseRef = useRef(null);
 
   async function handleSyncAll() {
     setSyncing(true);
-    setSyncMsg(null);
-    setSyncError(null);
     try {
       const { connections } = await getConnections();
       if (!connections.length) {
-        setSyncMsg('No banks connected yet.');
+        toast('No banks connected yet. Connect one from Import.');
         return;
       }
       let added = 0;
@@ -133,23 +125,29 @@ function DashboardScreen({ session, theme, setTheme }) {
         const result = await syncItem(c.id);
         added += result.added;
       }
-      setSyncMsg(added > 0 ? `Synced — ${added} new transaction${added === 1 ? '' : 's'}.` : 'Synced — up to date.');
+      toast(added > 0 ? `Synced: ${added} new transaction${added === 1 ? '' : 's'}` : 'Synced: everything is up to date');
       setRefreshKey(k => k + 1);
     } catch (err) {
-      setSyncError(err.message);
+      toast(`Sync failed: ${err.message}`, { error: true });
     } finally {
       setSyncing(false);
     }
   }
 
+  function go(key) {
+    setTab(key);
+    setSheetOpen(false);
+    window.scrollTo(0, 0);
+  }
+
   function goToAccountTransactions(accountId) {
     setPendingAccountFilter(accountId);
-    setTab('transactions');
+    go('transactions');
   }
 
   function goToSpendingBreakdown() {
     setPendingBreakdownOpen(true);
-    setTab('transactions');
+    go('transactions');
   }
 
   useEffect(() => {
@@ -165,284 +163,158 @@ function DashboardScreen({ session, theme, setTheme }) {
     return () => { cancelled = true; };
   }, [session.user.id]);
 
+  // iOS: the large page title collapses into the frosted top bar once scrolled.
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const root = document.documentElement;
+    const onScroll = () => root.classList.toggle('is-scrolled', window.scrollY > 44);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); root.classList.remove('is-scrolled'); };
   }, []);
 
-  function handleThemeChange(key) {
-    setTheme(key);
-    applyTheme(key);
-    setStoredTheme(key);
-  }
+  // More sheet: focus moves in on open, Escape closes, Tab stays inside, focus returns to More.
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false);
+    moreBtnRef.current?.focus({ preventScroll: true });
+  }, []);
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const t = setTimeout(() => sheetCloseRef.current?.focus({ preventScroll: true }), 60);
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); closeSheet(); }
+      if (e.key === 'Tab' && sheetRef.current) {
+        const focusable = [...sheetRef.current.querySelectorAll('button:not(:disabled)')];
+        if (!focusable.length) return;
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => { clearTimeout(t); document.removeEventListener('keydown', onKey); };
+  }, [sheetOpen, closeSheet]);
 
-  const activeMenuTab = MENU_TABS.find(t => t.key === tab);
-  const isModern = isModernTheme(theme);
   const activeLabel = ALL_TABS.find(t => t.key === tab)?.label || 'Overview';
+  const inMore = MORE_TABS.some(t => t.key === tab);
+  const hid = household?.householdId;
 
-  const pageContent = (
-    <>
-      {loadErr && <div style={{ color: 'var(--rust)' }}>Couldn't load your household: {loadErr}</div>}
-      {!loadErr && !household && <div style={{ color: 'var(--ink-soft)' }}>Loading…</div>}
-      {household && tab === 'overview' && <Overview key={refreshKey} householdId={household.householdId} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
-      {household && tab === 'transactions' && (
-        <Transactions
-          key={refreshKey}
-          householdId={household.householdId}
-          initialAccountFilter={pendingAccountFilter}
-          onConsumeInitialFilter={() => setPendingAccountFilter(null)}
-          initialBreakdownOpen={pendingBreakdownOpen}
-          onConsumeInitialBreakdownOpen={() => setPendingBreakdownOpen(false)}
-        />
-      )}
-      {household && tab === 'upcoming' && <Upcoming key={refreshKey} householdId={household.householdId} />}
-      {household && tab === 'networth' && <NetWorth key={refreshKey} householdId={household.householdId} />}
-      {household && tab === 'reimbursements' && <Reimbursements key={refreshKey} householdId={household.householdId} />}
-      {household && tab === 'allocations' && <Allocations key={refreshKey} householdId={household.householdId} />}
-      {household && tab === 'import' && <Import key={refreshKey} householdId={household.householdId} />}
-    </>
+  const syncButton = (
+    <button
+      type="button"
+      className={`btn btn-secondary btn-sm sync-btn${syncing ? ' is-spinning' : ''}`}
+      onClick={handleSyncAll}
+      disabled={syncing}
+      aria-busy={syncing}
+      aria-label={syncing ? 'Syncing accounts' : 'Sync accounts'}
+      title="Sync connected bank accounts"
+    >
+      <IconRefresh />
+      <span className="sync-label" aria-hidden="true">{syncing ? 'Syncing…' : 'Sync'}</span>
+    </button>
   );
 
-  // The "Modernist redesign" concept: a persistent sidebar (all tabs always visible,
-  // no hamburger overflow) instead of the classic header + bottom-nav shell. Content
-  // panels below are the exact same components either way - only the chrome differs -
-  // so switching designs can never lose functionality or leave the two out of sync.
-  if (isModern) {
-    return (
-      <div className="modern-shell">
-        <div className={`modern-sidebar-backdrop${sidebarOpen ? ' is-open' : ''}`} onClick={() => setSidebarOpen(false)} />
-        <aside className={`modern-sidebar${sidebarOpen ? ' is-open' : ''}`} style={{ background: 'var(--sidebar-bg)', color: 'var(--sidebar-text)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em', padding: '0 10px' }}>LEDGER</div>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {ALL_TABS.map(({ key, label }) => {
-              const active = tab === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => { setTab(key); setSidebarOpen(false); }}
-                  style={{
-                    textAlign: 'left', padding: '9px 10px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                    background: active ? 'var(--pine)' : 'transparent', color: active ? 'var(--sidebar-bg)' : 'var(--sidebar-text-soft)',
-                  }}
-                >{label}</button>
-              );
-            })}
-          </nav>
-          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--sidebar-text-soft)', padding: '0 10px' }}>Look</div>
-            <div style={{ display: 'flex', gap: 8, padding: '0 10px' }}>
-              {Object.entries(THEMES).filter(([, t]) => t.layout === 'modern').map(([key, t]) => (
-                <button
-                  key={key}
-                  onClick={() => handleThemeChange(key)}
-                  title={t.label}
-                  style={{
-                    width: 22, height: 22, padding: 2, boxSizing: 'border-box', cursor: 'pointer', background: 'none',
-                    border: theme === key ? '2px solid var(--pine)' : '2px solid transparent',
-                  }}
-                ><span style={{ display: 'block', width: '100%', height: '100%', background: t.pine }} /></button>
-              ))}
-            </div>
-            <button
-              onClick={() => handleThemeChange('colorful')}
-              style={{ background: 'none', border: '1px solid var(--sidebar-text-soft)', color: 'var(--sidebar-text)', padding: '7px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}
-            >← Back to classic design</button>
-            <div style={{ fontSize: 11, color: 'var(--sidebar-text-soft)', padding: '4px 10px 0' }}>{session.user.email}</div>
-            <button
-              onClick={() => supabase.auth.signOut()}
-              style={{ background: 'none', border: 'none', color: 'var(--sidebar-text-soft)', fontSize: 11, cursor: 'pointer', textAlign: 'left', padding: 0 }}
-            >Sign out</button>
-          </div>
-        </aside>
-        <main className="modern-main" style={{ padding: '32px 32px 60px', color: 'var(--ink)', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button
-                className="modern-hamburger"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open menu"
-                style={{ alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, border: '1px solid var(--line)', background: 'none', cursor: 'pointer', color: 'var(--ink)' }}
-              ><IconMenu color="var(--ink)" /></button>
-              <div style={{ fontWeight: 800, fontSize: 22 }}>{activeLabel}</div>
-            </div>
-            <button
-              onClick={handleSyncAll}
-              disabled={syncing}
-              style={{ border: '1px solid var(--line)', background: 'none', padding: '8px 16px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', cursor: syncing ? 'default' : 'pointer', color: 'var(--ink)' }}
-            >{syncing ? 'Syncing…' : 'Sync accounts'}</button>
-          </div>
-          {(syncMsg || syncError) && (
-            <div style={{ fontSize: 12.5, color: syncError ? 'var(--rust)' : 'var(--pine)', marginBottom: 20 }}>{syncError || syncMsg}</div>
-          )}
-          {pageContent}
-        </main>
-        <nav className="modern-bottom-nav">
-          {CORE_TABS.map(({ key, label, Icon }) => {
-            const active = tab === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 14px',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                }}
-              >
-                <Icon color={active ? 'var(--pine)' : 'var(--sidebar-text-soft)'} />
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: active ? 'var(--pine)' : 'var(--sidebar-text-soft)' }}>{label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: "'Inter', sans-serif" }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px 100px' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 600, color: 'var(--ink)' }}>Ledger</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={handleSyncAll}
-              disabled={syncing}
-              title="Sync connected bank accounts"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 999,
-                border: '1px solid var(--line)', background: 'var(--card)', fontSize: 12.5, fontWeight: 600,
-                color: 'var(--ink)', cursor: syncing ? 'default' : 'pointer', opacity: syncing ? 0.6 : 1,
-              }}
-            >
-              <IconRefresh color="var(--pine)" />
-              {syncing ? 'Syncing…' : 'Sync accounts'}
+    <div className="shell">
+      <aside className="sidebar" aria-label="Main">
+        <div className="sidebar-brand">Ledger</div>
+        <nav>
+          {ALL_TABS.map(({ key, label, Icon }) => (
+            <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => go(key)}>
+              <Icon />{label}
             </button>
-            <div ref={menuRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setMenuOpen(v => !v)}
-                style={{
-                  width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--card)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                }}
-              ><IconMore color="var(--ink)" /></button>
-              {menuOpen && (
-              <div style={{
-                position: 'absolute', right: 0, top: 46, background: 'var(--card)', borderRadius: 14,
-                boxShadow: '0 8px 28px rgba(27,33,29,0.14)', minWidth: 210, overflow: 'hidden', zIndex: 20,
-              }}>
-                <div style={{ padding: '10px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Pages</div>
-                {MENU_TABS.map(({ key, label, Icon }) => (
-                  <button
-                    key={key}
-                    onClick={() => { setTab(key); setMenuOpen(false); }}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px',
-                      background: tab === key ? 'var(--cream-tint)' : 'none', border: 'none', cursor: 'pointer',
-                      fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', textAlign: 'left',
-                    }}
-                  ><Icon color="var(--pine)" />{label}</button>
-                ))}
-                <div style={{ height: 1, background: 'var(--line)' }} />
-                <div style={{ padding: '10px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Appearance</div>
-                <div style={{ display: 'flex', gap: 6, padding: '4px 16px 2px' }}>
-                  {Object.entries(THEMES).filter(([, t]) => t.layout === 'classic').map(([key, t]) => (
-                    <button
-                      key={key}
-                      onClick={() => handleThemeChange(key)}
-                      title={t.label}
-                      style={{
-                        width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
-                        border: theme === key ? '2px solid var(--pine)' : '2px solid transparent',
-                        padding: 0, background: 'none',
-                      }}
-                    >
-                      <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: '50%', background: t.card, border: `1px solid ${t.line}`, boxShadow: `inset 0 0 0 6px ${t.pine}` }} />
-                    </button>
-                  ))}
-                </div>
-                <div style={{ padding: '8px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>New design (concept)</div>
-                <div style={{ display: 'flex', gap: 6, padding: '4px 16px 10px' }}>
-                  {Object.entries(THEMES).filter(([, t]) => t.layout === 'modern').map(([key, t]) => (
-                    <button
-                      key={key}
-                      onClick={() => { handleThemeChange(key); setMenuOpen(false); }}
-                      title={t.label}
-                      style={{
-                        width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
-                        border: theme === key ? '2px solid var(--pine)' : '2px solid transparent',
-                        padding: 0, background: 'none',
-                      }}
-                    >
-                      <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: '50%', background: t.bg, border: `1px solid ${t.ink}`, boxShadow: `inset 0 0 0 6px ${t.pine}` }} />
-                    </button>
-                  ))}
-                </div>
-                <div style={{ height: 1, background: 'var(--line)' }} />
-                <div style={{ padding: '10px 16px 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Account</div>
-                <div style={{ padding: '2px 16px 8px', fontSize: 11.5, color: 'var(--ink-soft)' }}>{session.user.email}</div>
-                <button
-                  onClick={() => supabase.auth.signOut()}
-                  style={{ width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, fontWeight: 500, color: 'var(--rust)', textAlign: 'left' }}
-                >Sign out</button>
-              </div>
-            )}
-            </div>
-          </div>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <div className="sheet-section" style={{ padding: 0 }} id="side-appearance">Appearance</div>
+          <ThemeSwitch theme={theme} onChange={onThemeChange} idPrefix="side" />
+          <div className="t-12 muted" style={{ marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.user.email}</div>
+          <button type="button" className="btn btn-quiet btn-sm is-neg" style={{ justifyContent: 'flex-start', padding: 0 }} onClick={() => supabase.auth.signOut()}>Sign out</button>
+        </div>
+      </aside>
+
+      <div style={{ minWidth: 0 }}>
+        <header className="topbar">
+          <span className="topbar-brand">Ledger</span>
+          <span className="topbar-compact" aria-hidden="true">{activeLabel}</span>
+          {syncButton}
         </header>
 
-        {(syncMsg || syncError) && (
-          <div style={{ fontSize: 12.5, color: syncError ? 'var(--rust)' : 'var(--pine)', marginTop: -12, marginBottom: 16 }}>
-            {syncError || syncMsg}
+        <main className="main">
+          <div className="page-head">
+            <h1 className="t-28 display">{activeLabel}</h1>
+            {tab === 'overview' && <span className="t-14 muted">{todayLabel()}</span>}
           </div>
-        )}
-
-        {activeMenuTab && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 12.5, color: 'var(--ink-soft)' }}>
-            <button onClick={() => setTab('overview')} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', padding: 0, fontSize: 12.5 }}>Overview</button>
-            <span>/</span>
-            <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{activeMenuTab.label}</span>
-          </div>
-        )}
-
-        {pageContent}
+          {loadErr && <ErrorState message={`Couldn't load your household: ${loadErr}`} />}
+          {!loadErr && !household && <LoadingState />}
+          {household && tab === 'overview' && <Overview householdId={hid} refreshKey={refreshKey} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
+          {household && tab === 'transactions' && (
+            <Transactions
+              householdId={hid}
+              refreshKey={refreshKey}
+              initialAccountFilter={pendingAccountFilter}
+              onConsumeInitialFilter={() => setPendingAccountFilter(null)}
+              initialBreakdownOpen={pendingBreakdownOpen}
+              onConsumeInitialBreakdownOpen={() => setPendingBreakdownOpen(false)}
+            />
+          )}
+          {household && tab === 'upcoming' && <Upcoming householdId={hid} refreshKey={refreshKey} />}
+          {household && tab === 'networth' && <NetWorth householdId={hid} refreshKey={refreshKey} />}
+          {household && tab === 'reimbursements' && <Reimbursements householdId={hid} refreshKey={refreshKey} />}
+          {household && tab === 'allocations' && <Allocations householdId={hid} refreshKey={refreshKey} />}
+          {household && tab === 'import' && <Import householdId={hid} refreshKey={refreshKey} />}
+        </main>
       </div>
 
-      <nav style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--nav-bg)', borderTop: '1px solid var(--line)',
-        display: 'flex', justifyContent: 'center', padding: '8px 0', boxShadow: '0 -4px 16px rgba(27,33,29,0.06)',
-      }}>
-        <div style={{ display: 'flex', gap: 8, maxWidth: 400, width: '100%', justifyContent: 'space-around' }}>
-          {CORE_TABS.map(({ key, label, Icon }) => {
-            const active = tab === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 14px',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                }}
-              >
-                <Icon color={active ? 'var(--pine)' : 'var(--ink-soft)'} />
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: active ? 'var(--pine)' : 'var(--ink-soft)' }}>{label}</span>
-              </button>
-            );
-          })}
-        </div>
+      <nav className="tabbar" aria-label="Main">
+        {TAB_BAR.map(({ key, label, Icon }) => (
+          <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => go(key)}>
+            <Icon />{label}
+          </button>
+        ))}
+        <button
+          ref={moreBtnRef}
+          type="button"
+          aria-current={inMore ? 'page' : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+          onClick={() => setSheetOpen(true)}
+        ><IconGrid />More</button>
       </nav>
+
+      <div className={`scrim${sheetOpen ? ' is-open' : ''}`} onClick={closeSheet} />
+      <div ref={sheetRef} className={`sheet${sheetOpen ? ' is-open' : ''}`} role="dialog" aria-modal="true" aria-labelledby="more-title" aria-hidden={!sheetOpen}>
+        <div className="sheet-grab" />
+        <div className="sheet-head">
+          <h2 className="t-20 display" id="more-title">More</h2>
+          <button ref={sheetCloseRef} type="button" className="btn-icon" aria-label="Close" onClick={closeSheet}><IconClose /></button>
+        </div>
+        <div className="sheet-section">Pages</div>
+        {MORE_TABS.map(({ key, label, Icon }) => (
+          <button key={key} type="button" className="row" aria-current={tab === key ? 'page' : undefined} onClick={() => go(key)}>
+            <span className="row-icon"><Icon /></span>
+            <span className="row-main t-14 semi">{label}</span>
+            <span className="row-chev"><IconChevronRight /></span>
+          </button>
+        ))}
+        <div className="sheet-section" id="sheet-appearance">Appearance</div>
+        <div style={{ padding: '4px 8px' }}><ThemeSwitch theme={theme} onChange={onThemeChange} idPrefix="sheet" /></div>
+        <div className="sheet-section">Account</div>
+        <div className="t-12 muted" style={{ padding: '0 8px 4px' }}>{session.user.email}</div>
+        <button type="button" className="btn btn-quiet is-neg" style={{ justifyContent: 'flex-start', padding: '0 8px' }} onClick={() => supabase.auth.signOut()}>Sign out</button>
+      </div>
     </div>
   );
 }
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
-  const [theme, setTheme] = useState(getStoredTheme());
+  const [theme, setTheme] = useState(getStoredTheme);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   useEffect(() => {
     applyTheme(theme);
+    return watchSystemTheme(() => themeRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -452,6 +324,18 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  if (session === undefined) return <div style={styles.page}><div style={{ color: 'var(--hero-text)' }}>Loading…</div></div>;
-  return session ? <DashboardScreen session={session} theme={theme} setTheme={setTheme} /> : <AuthScreen />;
+  function handleThemeChange(key) {
+    setTheme(key);
+    applyTheme(key);
+    setStoredTheme(key);
+  }
+
+  if (session === undefined) {
+    return <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }} className="t-14 muted">Loading…</div>;
+  }
+  return (
+    <ToastProvider>
+      {session ? <DashboardScreen session={session} theme={theme} onThemeChange={handleThemeChange} /> : <AuthScreen />}
+    </ToastProvider>
+  );
 }

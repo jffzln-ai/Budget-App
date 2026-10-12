@@ -12,14 +12,14 @@ function fmtDate(iso) {
 }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  card: { background: 'var(--card)', borderRadius: 16, padding: 22, boxShadow: 'var(--e1)' },
   label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' },
+  num: { fontFamily: 'var(--font)', fontVariantNumeric: 'tabular-nums' },
+  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 };
 const GOLD = 'var(--gold)';
 
-export default function Reimbursements({ householdId }) {
+export default function Reimbursements({ householdId, refreshKey = 0 }) {
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
   const [error, setError] = useState(null);
@@ -35,7 +35,8 @@ export default function Reimbursements({ householdId }) {
     }
   }
 
-  useEffect(() => { load(); }, [householdId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [householdId, refreshKey]);
 
   const outstanding = useMemo(() => {
     if (!transactions) return [];
@@ -96,7 +97,7 @@ export default function Reimbursements({ householdId }) {
           </div>
         ))}
         {outstanding.length > 0 && (
-          <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 700, textAlign: 'right' }}>
+          <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700, textAlign: 'right' }}>
             Total owed to you: <span style={s.num}>{fmtCAD(outstanding.reduce((sum, t) => sum + Math.abs(t.amount), 0))}</span>
           </div>
         )}
@@ -106,14 +107,14 @@ export default function Reimbursements({ householdId }) {
         <div style={s.card}>
           <div style={s.label}>Already reimbursed</div>
           {paid.map(t => (
-            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line-soft)', fontSize: 12.5 }}>
+            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line-soft)', fontSize: 13 }}>
               <div>
                 <span>{t.raw_description}</span>
                 <span style={{ color: 'var(--ink-soft)', marginLeft: 8 }}>{fmtDate(t.date)}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ ...s.num, fontWeight: 600 }}>{fmtCAD(Math.abs(t.amount))}</span>
-                <button onClick={() => undoReimbursed(t)} disabled={busyId === t.id} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline' }}>Undo</button>
+                <button onClick={() => undoReimbursed(t)} disabled={busyId === t.id} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Undo</button>
               </div>
             </div>
           ))}

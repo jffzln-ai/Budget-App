@@ -16,7 +16,7 @@ function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, '
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 20, padding: 22, maxWidth: 560, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  card: { background: 'var(--card)', borderRadius: 16, padding: 22, maxWidth: 560, boxShadow: 'var(--e1)' },
   label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
   field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
   btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
@@ -173,7 +173,7 @@ export default function Import({ householdId }) {
   return (
     <div style={s.card}>
       <div style={s.label}>Import a statement</div>
-      <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 }}>
         Pick which account this CSV is from, then upload the TD export. New transactions get categorized and checked against what's already in the database automatically.
       </div>
       <div style={{ marginBottom: 14 }}>
@@ -196,7 +196,7 @@ export default function Import({ householdId }) {
           }}
         >
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Drop a CSV here, or click to browse</div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>TD export for the account selected above</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>TD export for the account selected above</div>
         </div>
         <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }} />
       </div>
@@ -206,14 +206,14 @@ export default function Import({ householdId }) {
       {pending && (
         <div style={{ border: '1px solid var(--line)', borderRadius: 14, padding: 16, background: 'var(--cream-tint)' }}>
           {pending.guessNote && (
-            <div style={{ color: 'var(--pine)', fontSize: 12.5, marginBottom: 10 }}>{pending.guessNote}</div>
+            <div style={{ color: 'var(--pine)', fontSize: 13, marginBottom: 10 }}>{pending.guessNote}</div>
           )}
           {pending.formatMismatch && (
-            <div style={{ color: 'var(--rust)', fontSize: 12.5, marginBottom: 10 }}>
+            <div style={{ color: 'var(--rust)', fontSize: 13, marginBottom: 10 }}>
               This file looks like a {pending.detected === 'A' ? 'bank account' : 'credit card'} export, but you picked an account expecting the other format. Double check you picked the right account before confirming.
             </div>
           )}
-          <div style={{ fontSize: 13.5, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, marginBottom: 12 }}>
             <strong>{pending.rows.length}</strong> new transaction{pending.rows.length === 1 ? '' : 's'} ready to add
             {pending.skipped > 0 && <span style={{ color: 'var(--ink-soft)' }}> ({pending.skipped} already in the system, skipped)</span>}
           </div>

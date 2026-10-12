@@ -3,13 +3,20 @@ import {
   getRecurringRules, confirmRule, toggleSkipOccurrence, dismissRule, updateRuleAmount,
   getAccounts, getPlannedTransactions, addPlannedTransaction, removePlannedTransaction, updatePlannedTransaction,
 } from './lib/queries.js';
-import { LoadingState, ErrorState } from './lib/states.jsx';
+import { LoadingState, ErrorState, EmptyState } from './lib/states.jsx';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
-import { IconMoreVertical } from './lib/icons.jsx';
+import { useToast } from './lib/toast.jsx';
+import { useCountUp } from './lib/useCountUp.js';
+import { IconMoreVertical, IconChevronRight } from './lib/icons.jsx';
 
-const STATUS_LABEL = { active: 'Confirmed', needs_confirmation: 'Needs confirmation', pending_info: 'Waiting on you', dismissed: 'Dismissed' };
-const STATUS_COLOR = { active: 'var(--pine)', needs_confirmation: 'var(--gold)', pending_info: 'var(--rust)', dismissed: 'var(--ink-soft)' };
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Confirmed is the normal state, so it gets no chip; the others are filled chips on the semantic palette.
+const STATUS_CHIP = {
+  needs_confirmation: { label: 'Needs confirmation', cls: 'is-warn' },
+  pending_info: { label: 'Waiting on you', cls: 'is-warn' },
+  dismissed: { label: 'Dismissed', cls: 'is-muted' },
+};
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -18,6 +25,9 @@ function fmtCAD(n) {
 function fmtDate(iso) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function fmtShortDay(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 function monthLabel(ym) {
   const [y, m] = ym.split('-');
@@ -47,24 +57,8 @@ function countsTowardTotal(o) {
   return o.rule.status !== 'needs_confirmation' && !(o.rule.skipped_dates || []).includes(o.date);
 }
 
-const overflowItemStyle = {
-  width: '100%', display: 'block', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none',
-  cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--ink)',
-};
-
-const s = {
-  card: { background: 'var(--card)', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', gap: 12, flexWrap: 'wrap' },
-  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  badge: (color) => ({ fontSize: 11, fontWeight: 600, color, border: `1px solid ${color}`, borderRadius: 8, padding: '2px 7px', textTransform: 'uppercase' }),
-  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
-  dangerBtn: { background: 'none', border: '1px solid var(--rust)', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--rust)' },
-  field: { padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 12.5, background: 'var(--card)' },
-  segBtn: (active) => ({ padding: '5px 10px', fontSize: 12, fontWeight: 600, border: '1px solid var(--line)', background: active ? 'var(--pine)' : 'var(--card)', color: active ? 'var(--hero-text)' : 'var(--ink)', cursor: 'pointer' }),
-};
-
-export default function Upcoming({ householdId }) {
+export default function Upcoming({ householdId, refreshKey = 0 }) {
+  const toast = useToast();
   const [rules, setRules] = useState(null);
   const [accounts, setAccounts] = useState(null);
   const [plannedTxns, setPlannedTxns] = useState([]);
@@ -79,13 +73,16 @@ export default function Upcoming({ householdId }) {
   const [amountDraft, setAmountDraft] = useState('');
   const [editingPlannedId, setEditingPlannedId] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
     function closeMenu(e) {
       if (!e.target.closest('[data-row-menu]')) setOpenMenuId(null);
     }
+    function onKey(e) { if (e.key === 'Escape') setOpenMenuId(null); }
     document.addEventListener('mousedown', closeMenu);
-    return () => document.removeEventListener('mousedown', closeMenu);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', closeMenu); document.removeEventListener('keydown', onKey); };
   }, []);
   const [plannedDraft, setPlannedDraft] = useState({ description: '', date: '', amount: '' });
 
@@ -96,12 +93,17 @@ export default function Upcoming({ householdId }) {
       setAccounts(accs);
       setPlannedTxns(planned);
       if (!plannedForm.account_id && accs.length) setPlannedForm(f => ({ ...f, account_id: accs[0].id }));
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
   }
 
-  useEffect(() => { load(); }, [householdId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [householdId, refreshKey]);
+
+  // Action failures are reported as a toast; the page stays usable.
+  const fail = (what, err) => toast(`${what}: ${err.message}`, { error: true });
 
   const today = todayIso();
 
@@ -160,7 +162,7 @@ export default function Upcoming({ householdId }) {
       await confirmRule(rule.id);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyKey(null);
     }
@@ -172,7 +174,7 @@ export default function Upcoming({ householdId }) {
       await toggleSkipOccurrence(occ.rule.id, occ.rule.skipped_dates || [], occ.date);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyKey(null);
     }
@@ -185,7 +187,7 @@ export default function Upcoming({ householdId }) {
       await dismissRule(rule.id);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyKey(null);
     }
@@ -205,7 +207,7 @@ export default function Upcoming({ householdId }) {
       setEditingAmountId(null);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyKey(null);
     }
@@ -222,7 +224,7 @@ export default function Upcoming({ householdId }) {
       setPlannedForm(f => ({ ...f, description: '', date: '', amount: '' }));
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setSavingPlanned(false);
     }
@@ -234,7 +236,7 @@ export default function Upcoming({ householdId }) {
       await removePlannedTransaction(id);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     }
   }
 
@@ -252,83 +254,99 @@ export default function Upcoming({ householdId }) {
       setEditingPlannedId(null);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyKey(null);
     }
   }
 
-  if (error) return <ErrorState message={error} />;
+  const shownDue = useCountUp(rules && accounts ? dueBeforePayday : null);
+
+  if (error && !rules) return <ErrorState message={`Couldn't load upcoming: ${error}`} />;
   if (!rules || !accounts) return <LoadingState label="Loading upcoming…" />;
 
-  function renderOccurrence(o, moneyColor) {
+  const billsBeforePayday = infinityAccount && nextPayrollDate
+    ? occurrences.filter(o => o.rule.account_id === infinityAccount.id && !isIncome(o.rule) && o.date <= nextPayrollDate && countsTowardTotal(o)).length
+    : 0;
+  // The only part of this page that needs a decision gets its own card at the top.
+  const needsConfirmation = rules.filter(r => r.status === 'needs_confirmation' && r.next_expected_date);
+  const needsYouCount = needsConfirmation.length + unscheduled.length;
+
+  function dotClass(o) {
+    if ((o.rule.skipped_dates || []).includes(o.date)) return 'dot-skip';
+    if (o.rule.status === 'needs_confirmation' || o.rule.status === 'pending_info') return 'dot-attn';
+    return isIncome(o.rule) ? 'dot-income' : 'dot-bill';
+  }
+
+  function renderOccurrence(o) {
     const isSkipped = (o.rule.skipped_dates || []).includes(o.date);
     const busy = busyKey === o.rule.id || busyKey === o.occId;
 
     if (o.rule.planned && editingPlannedId === o.rule.id) {
       return (
-        <div key={o.occId} style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Description</div>
-            <input style={{ ...s.field, width: '100%' }} value={plannedDraft.description} onChange={e => setPlannedDraft(d => ({ ...d, description: e.target.value }))} autoFocus />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Date</div>
-            <input style={s.field} type="date" value={plannedDraft.date} onChange={e => setPlannedDraft(d => ({ ...d, date: e.target.value }))} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Amount</div>
-            <input style={{ ...s.field, width: 90 }} type="number" value={plannedDraft.amount} onChange={e => setPlannedDraft(d => ({ ...d, amount: e.target.value }))} />
-          </div>
-          <button style={s.btn} disabled={busy} onClick={() => savePlannedEdit(o.rule.id)}>{busy ? 'Saving…' : 'Save'}</button>
-          <button style={s.ghostBtn} onClick={() => setEditingPlannedId(null)}>Cancel</button>
+        <div key={o.occId} className="occ">
+          <form className="form-row" style={{ flex: 1 }} onSubmit={e => { e.preventDefault(); savePlannedEdit(o.rule.id); }}>
+            <label className="field" style={{ flexBasis: 180 }}><span>Description</span>
+              <input className="input" value={plannedDraft.description} onChange={e => setPlannedDraft(d => ({ ...d, description: e.target.value }))} autoFocus />
+            </label>
+            <label className="field"><span>Date</span>
+              <input className="input" type="date" value={plannedDraft.date} onChange={e => setPlannedDraft(d => ({ ...d, date: e.target.value }))} />
+            </label>
+            <label className="field"><span>Amount</span>
+              <input className="input" type="number" inputMode="decimal" value={plannedDraft.amount} onChange={e => setPlannedDraft(d => ({ ...d, amount: e.target.value }))} />
+            </label>
+            <div className="toolbar">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setEditingPlannedId(null)}>Cancel</button>
+            </div>
+          </form>
         </div>
       );
     }
 
     const income = isIncome(o.rule);
+    const chip = !o.rule.planned && !income ? STATUS_CHIP[o.rule.status] : null;
+    const menuOpen = openMenuId === o.occId;
     return (
-      <div key={o.occId} style={{ ...s.row, opacity: isSkipped ? 0.55 : 1 }}>
-        <div>
-          <div style={{ fontSize: 13.5, fontWeight: 500, textDecoration: isSkipped ? 'line-through' : 'none' }}>{o.rule.label}</div>
-          <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{fmtDate(o.date)} · {o.rule.planned ? 'one-off' : o.rule.cadence}{isSkipped ? ' · skipped' : ''}</div>
+      <div key={o.occId} className={`occ${isSkipped ? ' is-skipped' : ''}`}>
+        <div className="occ-main">
+          <span className="occ-title t-14 semi">{o.rule.label}</span>
+          <span className="t-12 muted">{fmtShortDay(o.date)} · {o.rule.planned ? 'one-off' : o.rule.cadence}{isSkipped ? ' · skipped' : ''}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div className="occ-end">
           {editingAmountId === o.rule.id ? (
-            <>
-              <input style={{ ...s.field, width: 80 }} type="number" value={amountDraft} onChange={e => setAmountDraft(e.target.value)} autoFocus />
-              <button style={s.btn} disabled={busy} onClick={() => saveRuleAmount(o.rule)}>{busy ? '…' : 'Save'}</button>
-              <button style={s.ghostBtn} onClick={() => setEditingAmountId(null)}>Cancel</button>
-            </>
-          ) : (
-            <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: isSkipped ? 'var(--ink-soft)' : income ? 'var(--pine)' : moneyColor }}>
-              {income ? '+' : ''}{fmtCAD(o.rule.expected_amount)}
-            </span>
-          )}
-          {editingAmountId !== o.rule.id && (<>
-            {!o.rule.planned && !income && <span style={s.badge(STATUS_COLOR[o.rule.status])}>{STATUS_LABEL[o.rule.status]}</span>}
+            <form className="toolbar" onSubmit={e => { e.preventDefault(); saveRuleAmount(o.rule); }}>
+              <label className="sr-only" htmlFor={`amt-${o.occId}`}>Amount for {o.rule.label}</label>
+              <input id={`amt-${o.occId}`} className="input input-sm" type="number" inputMode="decimal" value={amountDraft} onChange={e => setAmountDraft(e.target.value)} autoFocus />
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setEditingAmountId(null)}>Cancel</button>
+            </form>
+          ) : (<>
+            {chip && <span className={`chip ${chip.cls}`}>{chip.label}</span>}
+            <span className={`t-14 semi${income && !isSkipped ? ' pos' : ''}`} style={{ whiteSpace: 'nowrap' }}>{income ? '+' : ''}{fmtCAD(o.rule.expected_amount)}</span>
             {!o.rule.planned && o.rule.status === 'needs_confirmation' && (
-              <button style={s.btn} disabled={busy} onClick={() => handleConfirm(o.rule)}>{busy ? 'Saving…' : 'Confirm'}</button>
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => handleConfirm(o.rule)}>{busy ? 'Saving…' : 'Confirm'}</button>
             )}
             {!o.rule.planned && !income && o.rule.status !== 'needs_confirmation' && (
-              <button style={s.ghostBtn} disabled={busy} onClick={() => handleSkip(o)}>{busy ? '…' : isSkipped ? 'Restore' : 'Skip'}</button>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => handleSkip(o)}>{busy ? 'Saving…' : isSkipped ? 'Restore' : 'Skip'}</button>
             )}
-            <div data-row-menu style={{ position: 'relative' }}>
+            <div className="menu-anchor" data-row-menu>
               <button
-                onClick={() => setOpenMenuId(openMenuId === o.occId ? null : o.occId)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-              ><IconMoreVertical color="var(--ink-soft)" /></button>
-              {openMenuId === o.occId && (
-                <div style={{
-                  position: 'absolute', right: 0, top: 30, background: 'var(--card)', borderRadius: 12,
-                  boxShadow: '0 8px 24px rgba(27,33,29,0.16)', minWidth: 130, overflow: 'hidden', zIndex: 10,
-                }}>
+                type="button"
+                className="btn-icon"
+                aria-label={`More actions for ${o.rule.label}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setOpenMenuId(menuOpen ? null : o.occId)}
+              ><IconMoreVertical /></button>
+              {menuOpen && (
+                <div className="menu" role="menu">
                   {o.rule.planned ? (<>
-                    <button onClick={() => { startEditPlanned(plannedTxns.find(p => p.id === o.rule.id)); setOpenMenuId(null); }} style={overflowItemStyle}>Edit</button>
-                    <button onClick={() => { handleRemovePlanned(o.rule.id); setOpenMenuId(null); }} style={{ ...overflowItemStyle, color: 'var(--rust)' }}>Delete</button>
+                    <button type="button" role="menuitem" onClick={() => { startEditPlanned(plannedTxns.find(p => p.id === o.rule.id)); setOpenMenuId(null); }}>Edit</button>
+                    <button type="button" role="menuitem" className="is-neg" onClick={() => { handleRemovePlanned(o.rule.id); setOpenMenuId(null); }}>Delete</button>
                   </>) : (<>
-                    <button onClick={() => { startEditAmount(o.rule.id, o.rule.expected_amount); setOpenMenuId(null); }} style={overflowItemStyle}>Edit</button>
-                    <button onClick={() => { handleDismissRule(o.rule); setOpenMenuId(null); }} style={{ ...overflowItemStyle, color: 'var(--rust)' }}>Delete</button>
+                    <button type="button" role="menuitem" onClick={() => { startEditAmount(o.rule.id, o.rule.expected_amount); setOpenMenuId(null); }}>Edit amount</button>
+                    <button type="button" role="menuitem" className="is-neg" onClick={() => { handleDismissRule(o.rule); setOpenMenuId(null); }}>Stop tracking</button>
                   </>)}
                 </div>
               )}
@@ -339,114 +357,152 @@ export default function Upcoming({ householdId }) {
     );
   }
 
+  const selectedOccs = selectedDate ? (occByDate[selectedDate] || []) : [];
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
-        <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
+    <div className="stack">
+      <div className="toolbar" style={{ justifyContent: 'space-between' }}>
+        <label className="sr-only" htmlFor="up-account">Account</label>
+        <select id="up-account" className="input" style={{ width: 'auto', minWidth: 160 }} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
           <option value="all">All accounts</option>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <div style={{ display: 'flex', gap: 0 }}>
-          <button style={{ ...s.segBtn(view === 'list'), borderRadius: '4px 0 0 4px' }} onClick={() => setView('list')}>List</button>
-          <button style={{ ...s.segBtn(view === 'calendar'), borderRadius: '0 4px 4px 0' }} onClick={() => setView('calendar')}>Calendar</button>
+        <div className="segmented" role="group" aria-label="View" style={{ minWidth: 180 }}>
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
+          <button type="button" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>Calendar</button>
         </div>
       </div>
 
       {nextPayrollDate && (
-        <div style={{ ...s.card, padding: '14px 20px', marginBottom: 14, background: 'var(--pine)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontSize: 12, color: 'rgba(248,246,240,0.8)' }}>Due on Infinity before next payday ({fmtDate(nextPayrollDate)})</div>
-          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: 'var(--hero-text)' }}>{fmtCAD(dueBeforePayday)}</div>
-        </div>
+        <section className="hero" aria-labelledby="due-label">
+          <span className="t-12 caps hero-soft" id="due-label">Due before payday</span>
+          <span className="hero-value t-44 display">{fmtCAD(shownDue)}</span>
+          <span className="t-14 hero-soft">{billsBeforePayday} bill{billsBeforePayday === 1 ? '' : 's'} on Infinity · payday {fmtShortDay(nextPayrollDate)}</span>
+        </section>
       )}
 
-      {unscheduled.length > 0 && (
-        <div style={{ ...s.card, padding: 16, marginBottom: 14, border: '1px solid var(--rust)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>Waiting on you</div>
-          {unscheduled.map(r => (
-            <div key={r.id} style={{ fontSize: 13, padding: '4px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{r.label} — <span style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>{r.note}</span></span>
-              <button style={s.dangerBtn} onClick={() => handleDismissRule(r)}>Delete</button>
+      {needsYouCount > 0 && (
+        <section className="card attention" aria-labelledby="needs-h">
+          <div className="card-head">
+            <h2 className="t-16 semi" id="needs-h">Needs you</h2>
+            <span className="chip is-warn">{needsYouCount}</span>
+          </div>
+          {needsConfirmation.map(r => (
+            <div key={r.id} className="occ" style={{ padding: '4px 0' }}>
+              <div className="occ-main">
+                <span className="t-14 semi">{r.label}</span>
+                <span className="t-12 muted">{r.note || `Confirm this ${r.cadence} bill`} · {fmtCAD(r.expected_amount)}</span>
+              </div>
+              <div className="occ-end">
+                <button type="button" className="btn btn-primary btn-sm" disabled={busyKey === r.id} onClick={() => handleConfirm(r)}>{busyKey === r.id ? 'Saving…' : 'Confirm'}</button>
+                <button type="button" className="btn btn-quiet btn-sm is-neg" disabled={busyKey === r.id} onClick={() => handleDismissRule(r)}>Remove</button>
+              </div>
             </div>
           ))}
-        </div>
+          {unscheduled.map(r => (
+            <div key={r.id} className="occ" style={{ padding: '4px 0' }}>
+              <div className="occ-main">
+                <span className="t-14 semi">{r.label}</span>
+                <span className="t-12 muted">{r.note || 'No next date found'}</span>
+              </div>
+              <div className="occ-end">
+                <button type="button" className="btn btn-quiet btn-sm is-neg" disabled={busyKey === r.id} onClick={() => handleDismissRule(r)}>Remove</button>
+              </div>
+            </div>
+          ))}
+        </section>
       )}
 
       {view === 'list' ? (
-        monthGroups.map(([ym, occs]) => {
+        monthGroups.length === 0 ? (
+          <div className="card"><EmptyState label="Nothing scheduled ahead." /></div>
+        ) : monthGroups.map(([ym, occs]) => {
           const income = occs.filter(o => isIncome(o.rule) && countsTowardTotal(o)).reduce((sum, o) => sum + o.rule.expected_amount, 0);
           const expense = occs.filter(o => !isIncome(o.rule) && countsTowardTotal(o)).reduce((sum, o) => sum + o.rule.expected_amount, 0);
           const net = income - expense;
           return (
-            <div key={ym} style={{ ...s.card, marginBottom: 14 }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 600 }}>{monthLabel(ym)}</div>
-                <div style={{ fontSize: 12, display: 'flex', gap: 12 }}>
-                  <span style={{ color: 'var(--ink-soft)' }}>In: <span style={{ ...s.num, color: 'var(--pine)', fontWeight: 600 }}>{fmtCAD(income)}</span></span>
-                  <span style={{ color: 'var(--ink-soft)' }}>Out: <span style={{ ...s.num, color: 'var(--ink)', fontWeight: 600 }}>{fmtCAD(expense)}</span></span>
-                  <span style={{ color: 'var(--ink-soft)' }}>Net: <span style={{ ...s.num, color: net < 0 ? 'var(--rust)' : 'var(--pine)', fontWeight: 700 }}>{fmtCAD(net)}{net < 0 ? ' short' : ''}</span></span>
+            <section key={ym} className="card" aria-labelledby={`m-${ym}`}>
+              <div className="card-head" style={{ flexWrap: 'wrap' }}>
+                <h2 className="t-16 semi" id={`m-${ym}`}>{monthLabel(ym)}</h2>
+                <div className="month-sum t-12 muted">
+                  <span>In <b className="pos">{fmtCAD(income)}</b></span>
+                  <span>Out <b style={{ color: 'var(--ink)' }}>{fmtCAD(expense)}</b></span>
+                  <span>Net <b className={net < 0 ? 'neg' : 'pos'}>{net < 0 ? '−' : ''}{fmtCAD(net)}{net < 0 ? ' short' : ''}</b></span>
                 </div>
               </div>
-              {occs.map(o => renderOccurrence(o, 'var(--ink)'))}
-            </div>
+              <div>{occs.map(renderOccurrence)}</div>
+            </section>
           );
         })
       ) : (
-        <div style={{ ...s.card, padding: 16, marginBottom: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <button style={s.ghostBtn} onClick={() => setCalendarMonth(m => shiftMonth(m, -1))}>← Prev</button>
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 600 }}>{monthLabel(calendarMonth)}</div>
-            <button style={s.ghostBtn} onClick={() => setCalendarMonth(m => shiftMonth(m, 1))}>Next →</button>
+        <section className="card" aria-labelledby="cal-h">
+          <div className="cal-nav">
+            <button type="button" className="btn-icon" aria-label="Previous month" onClick={() => { setCalendarMonth(m => shiftMonth(m, -1)); setSelectedDate(null); }}>
+              <span style={{ display: 'flex', transform: 'rotate(180deg)' }}><IconChevronRight /></span>
+            </button>
+            <h2 className="t-16 semi" id="cal-h">{monthLabel(calendarMonth)}</h2>
+            <button type="button" className="btn-icon" aria-label="Next month" onClick={() => { setCalendarMonth(m => shiftMonth(m, 1)); setSelectedDate(null); }}>
+              <IconChevronRight />
+            </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-            {WEEKDAYS.map(w => <div key={w} style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--ink-soft)', textAlign: 'center', padding: '2px 0' }}>{w}</div>)}
-            {buildCalendarCells(calendarMonth).map((date, i) => (
-              <div key={i} style={{ minHeight: 64, border: date ? '1px solid var(--line)' : 'none', borderRadius: 10, padding: 4, background: date ? 'var(--card)' : 'transparent' }}>
-                {date && (<>
-                  <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 2 }}>{Number(date.slice(8))}</div>
-                  {(occByDate[date] || []).slice(0, 3).map(o => {
-                    const isSkipped = (o.rule.skipped_dates || []).includes(o.date);
-                    const income = isIncome(o.rule);
-                    return (
-                      <div key={o.occId} title={`${o.rule.label} ${fmtCAD(o.rule.expected_amount)}`} style={{
-                        fontSize: 9.5, padding: '1px 3px', marginBottom: 1, borderRadius: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                        background: isSkipped ? 'var(--line)' : income ? 'var(--pine)' : 'var(--pine-soft)', color: isSkipped ? 'var(--ink-soft)' : income ? 'var(--hero-text)' : 'var(--ink)',
-                        textDecoration: isSkipped ? 'line-through' : 'none',
-                      }}>{o.rule.label}</div>
-                    );
-                  })}
-                  {(occByDate[date] || []).length > 3 && <div style={{ fontSize: 9, color: 'var(--ink-soft)' }}>+{occByDate[date].length - 3} more</div>}
-                </>)}
-              </div>
-            ))}
+          <div className="cal">
+            {WEEKDAYS.map((w, i) => <div key={`wd-${i}`} className="cal-wd" aria-hidden="true">{w}</div>)}
+            {buildCalendarCells(calendarMonth).map((date, i) => {
+              if (!date) return <div key={`blank-${i}`} />;
+              const occs = occByDate[date] || [];
+              const isToday = date === today;
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  className={`cal-day${isToday ? ' is-today' : ''}${occs.length ? '' : ' is-quiet'}`}
+                  aria-pressed={selectedDate === date}
+                  aria-label={`${fmtDate(date)}: ${occs.length ? `${occs.length} item${occs.length === 1 ? '' : 's'}` : 'nothing due'}`}
+                  onClick={() => setSelectedDate(selectedDate === date ? null : date)}
+                >
+                  <span>{Number(date.slice(8))}</span>
+                  <span className="cal-dots" aria-hidden="true">{occs.slice(0, 3).map(o => <i key={o.occId} className={dotClass(o)} />)}</span>
+                </button>
+              );
+            })}
           </div>
-        </div>
+          <div className="legend t-12 muted" aria-hidden="true">
+            <span><i className="dot-bill" />Bill</span>
+            <span><i className="dot-income" />Income</span>
+            <span><i className="dot-attn" />Needs you</span>
+          </div>
+          {selectedDate ? (
+            <div>
+              <div className="t-12 caps muted" style={{ padding: '8px 8px 0' }}>{WEEKDAY_NAMES[new Date(selectedDate + 'T00:00:00').getDay()]}, {fmtDate(selectedDate)}</div>
+              {selectedOccs.length ? selectedOccs.map(renderOccurrence) : <EmptyState label="Nothing due this day." />}
+            </div>
+          ) : (
+            <div className="t-12 muted">Tap a day to see what's due.</div>
+          )}
+        </section>
       )}
 
-      <div style={{ ...s.card, padding: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>Add a one-off planned expense</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Description</div>
-            <input style={{ ...s.field, width: '100%' }} value={plannedForm.description} onChange={e => setPlannedForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. New tires" />
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Account</div>
-            <select style={s.field} value={plannedForm.account_id} onChange={e => setPlannedForm(f => ({ ...f, account_id: e.target.value }))}>
+      <section className="card" aria-labelledby="plan-h">
+        <h2 className="t-16 semi" id="plan-h" style={{ margin: 0 }}>Add a one-off planned expense</h2>
+        <form className="form-row" onSubmit={e => { e.preventDefault(); handleAddPlanned(); }}>
+          <label className="field" style={{ flexBasis: 200 }}><span>Description</span>
+            <input className="input" value={plannedForm.description} onChange={e => setPlannedForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. New tires" />
+          </label>
+          <label className="field"><span>Account</span>
+            <select className="input" value={plannedForm.account_id} onChange={e => setPlannedForm(f => ({ ...f, account_id: e.target.value }))}>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Date</div>
-            <input style={s.field} type="date" value={plannedForm.date} onChange={e => setPlannedForm(f => ({ ...f, date: e.target.value }))} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 3 }}>Amount</div>
-            <input style={{ ...s.field, width: 90 }} type="number" value={plannedForm.amount} onChange={e => setPlannedForm(f => ({ ...f, amount: e.target.value }))} placeholder="-$ or +$" />
-          </div>
-          <button style={s.btn} disabled={savingPlanned} onClick={handleAddPlanned}>{savingPlanned ? 'Saving…' : 'Add'}</button>
-        </div>
-        <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 8 }}>Use a negative amount for an expense, positive for expected income.</div>
-      </div>
+          </label>
+          <label className="field"><span>Date</span>
+            <input className="input" type="date" value={plannedForm.date} onChange={e => setPlannedForm(f => ({ ...f, date: e.target.value }))} />
+          </label>
+          <label className="field"><span>Amount</span>
+            <input className="input" type="number" inputMode="decimal" value={plannedForm.amount} onChange={e => setPlannedForm(f => ({ ...f, amount: e.target.value }))} placeholder="−$ or +$" />
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={savingPlanned}>{savingPlanned ? 'Saving…' : 'Add'}</button>
+        </form>
+        <div className="t-12 muted">Use a negative amount for an expense, positive for expected income.</div>
+      </section>
     </div>
   );
 }
