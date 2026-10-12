@@ -1,21 +1,18 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { getAccounts, getRecurringRules, getAllTransactions, getTransactionTags, getPlannedTransactions, getBudgets, setBudget, removeBudget, computeLiveBalances } from './lib/queries.js';
 import { LoadingState, ErrorState } from './lib/states.jsx';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
-import { ProgressRing, IconClock, IconWallet, IconBank, IconPiggyBank, IconCreditCard, IconChevronRight } from './lib/icons.jsx';
+import { useToast } from './lib/toast.jsx';
+import { useCountUp } from './lib/useCountUp.js';
+import { IconChevronRight, IconChevronDown, IconPencil } from './lib/icons.jsx';
+import { AccountRow, Money, fmtCAD } from './lib/accounts.jsx';
 
-function fmtCAD(n) {
-  if (n === null || n === undefined) return '—';
-  const sign = n < 0 ? '−' : '';
-  return sign + '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtDate(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
-}
 function monthLabel(ym) {
   const [y, m] = ym.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long' });
+}
+function paydayLabel(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' });
 }
 function endOfMonth(ym) {
   const [y, m] = ym.split('-').map(Number);
@@ -31,28 +28,96 @@ function nextMonths(n) {
   return out;
 }
 
-const s = {
-  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 6 },
-  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  field: { padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 12, background: 'var(--card)' },
-};
-const RUST = 'var(--rust)';
-const PINE = 'var(--pine)';
-const PINE_SOFT = 'var(--pine-soft)';
-const GOLD = 'var(--gold)';
+function CategoryRow({ cat, amount, budget, maxSpend, editing, onEdit, onCancel, onSave, onRemove, flash }) {
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+  const editBtnRef = useRef(null);
+  const wasEditing = useRef(false);
+  const shownAmount = useCountUp(amount);
+  const inputId = `budget-${cat.replace(/\W/g, '')}`;
 
-function accountVisual(type) {
-  switch (type) {
-    case 'savings': return { Icon: IconPiggyBank, color: GOLD };
-    case 'credit_card':
-    case 'line_of_credit': return { Icon: IconCreditCard, color: RUST };
-    case 'investment': return { Icon: IconWallet, color: GOLD };
-    default: return { Icon: IconBank, color: PINE };
+  useEffect(() => {
+    if (editing) {
+      setDraft(budget != null ? String(budget) : '');
+      setError(null);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    } else if (wasEditing.current) {
+      editBtnRef.current?.focus({ preventScroll: true });
+    }
+    wasEditing.current = editing;
+  }, [editing, budget]);
+
+  let state = 'none';
+  if (budget != null) state = amount > budget ? 'over' : amount >= budget * 0.9 ? 'near' : 'ok';
+  const fillClass = state === 'over' ? 'is-neg' : state === 'near' ? 'is-warn' : state === 'none' ? 'is-muted' : '';
+  const width = Math.min((amount / (budget || maxSpend || 1)) * 100, 100);
+
+  async function submit(e) {
+    e.preventDefault();
+    const val = parseFloat(draft);
+    if (draft.trim() === '' || Number.isNaN(val) || val < 0) { setError('Enter a monthly amount of $0 or more.'); inputRef.current?.focus(); return; }
+    setSaving(true);
+    try { await onSave(cat, val); } finally { setSaving(false); }
   }
+  async function remove() {
+    setSaving(true);
+    try { await onRemove(cat); } finally { setSaving(false); }
+  }
+
+  return (
+    <li className={`cat${flash ? ' flash' : ''}`}>
+      <div className="cat-line">
+        <span className="cat-name">
+          <span className="t-14 semi">{cat}</span>
+          {state === 'over' && <span className="chip is-neg">Over by {fmtCAD(amount - budget)}</span>}
+          {state === 'near' && <span className="chip is-warn">{fmtCAD(budget - amount)} left</span>}
+        </span>
+        <span className="cat-amount t-14">
+          <b className="semi">{fmtCAD(shownAmount)}</b>
+          {budget != null && <span className="muted"> / {fmtCAD(budget)}</span>}
+        </span>
+        <button
+          ref={editBtnRef}
+          type="button"
+          className="btn-icon"
+          onClick={editing ? onCancel : onEdit}
+          aria-expanded={editing}
+          aria-label={`${budget != null ? 'Edit' : 'Set'} budget for ${cat}`}
+        ><IconPencil /></button>
+      </div>
+      {editing ? (
+        <form className="cat-edit" onSubmit={submit} noValidate>
+          <label className="sr-only" htmlFor={inputId}>Monthly budget for {cat}</label>
+          <input
+            ref={inputRef}
+            id={inputId}
+            className="input input-sm"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="10"
+            placeholder="Monthly $"
+            value={draft}
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={error ? `${inputId}-err` : undefined}
+            onChange={e => { setDraft(e.target.value); setError(null); }}
+          />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button type="button" className="btn btn-quiet btn-sm" onClick={onCancel} disabled={saving}>Cancel</button>
+          {budget != null && <button type="button" className="btn btn-quiet btn-sm is-neg" onClick={remove} disabled={saving}>Remove</button>}
+          {error && <span className="field-error" id={`${inputId}-err`}>{error}</span>}
+        </form>
+      ) : (
+        <div className="bar" aria-hidden="true"><i className={fillClass} style={{ width: `${width}%` }} /></div>
+      )}
+    </li>
+  );
 }
 
-export default function Overview({ householdId, onSelectAccount, onViewSpending }) {
+export default function Overview({ householdId, refreshKey = 0, onSelectAccount, onViewSpending }) {
+  const toast = useToast();
   const [accounts, setAccounts] = useState(null);
   const [rules, setRules] = useState(null);
   const [transactions, setTransactions] = useState(null);
@@ -62,16 +127,23 @@ export default function Overview({ householdId, onSelectAccount, onViewSpending 
   const [error, setError] = useState(null);
   const [horizon, setHorizon] = useState('payday');
   const [editingBudgetCat, setEditingBudgetCat] = useState(null);
-  const [budgetDraft, setBudgetDraft] = useState('');
+  const [flashCats, setFlashCats] = useState([]);
+  const prevCatTotals = useRef(null);
 
+  const load = useCallback(async () => {
+    const [accs, r, txns, tagMap, planned, budgetRows] = await Promise.all([
+      getAccounts(householdId), getRecurringRules(householdId),
+      getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
+    ]);
+    return { accs, r, txns, tagMap, planned, budgetRows };
+  }, [householdId]);
+
+  // Reloads keep the current numbers on screen and update them in place.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [accs, r, txns, tagMap, planned, budgetRows] = await Promise.all([
-          getAccounts(householdId), getRecurringRules(householdId),
-          getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
-        ]);
+        const { accs, r, txns, tagMap, planned, budgetRows } = await load();
         if (cancelled) return;
         setAccounts(accs);
         setRules(r);
@@ -79,29 +151,13 @@ export default function Overview({ householdId, onSelectAccount, onViewSpending 
         setTags(tagMap);
         setPlannedTxns(planned);
         setBudgets(budgetRows);
+        setError(null);
       } catch (err) {
         if (!cancelled) setError(err.message);
       }
     })();
     return () => { cancelled = true; };
-  }, [householdId]);
-
-  async function reload() {
-    try {
-      const [accs, r, txns, tagMap, planned, budgetRows] = await Promise.all([
-        getAccounts(householdId), getRecurringRules(householdId),
-        getAllTransactions(householdId), getTransactionTags(householdId), getPlannedTransactions(householdId), getBudgets(householdId),
-      ]);
-      setAccounts(accs);
-      setRules(r);
-      setTransactions(txns);
-      setTags(tagMap);
-      setPlannedTxns(planned);
-      setBudgets(budgetRows);
-    } catch (err) {
-      setError(err.message);
-    }
-  }
+  }, [load, refreshKey]);
 
   const today = todayIso();
   const horizonMonths = useMemo(() => nextMonths(3), []);
@@ -169,6 +225,21 @@ export default function Overview({ householdId, onSelectAccount, onViewSpending 
     return Object.entries(totals).sort((a, b) => b[1] - a[1]);
   }, [transactions, tags, thisMonthYm]);
   const maxCategorySpend = categorySpend.length ? categorySpend[0][1] : 1;
+  const monthSpendTotal = categorySpend.reduce((s, [, amt]) => s + amt, 0);
+  const netWorth = accounts ? accounts.reduce((s, a) => s + (balances[a.id] || 0), 0) : 0;
+
+  // After a refresh, briefly highlight the categories whose totals moved.
+  useEffect(() => {
+    const now = Object.fromEntries(categorySpend);
+    const before = prevCatTotals.current;
+    prevCatTotals.current = now;
+    if (!before) return;
+    const changed = Object.keys(now).filter(k => before[k] !== now[k]);
+    if (!changed.length) return;
+    setFlashCats(changed);
+    const t = setTimeout(() => setFlashCats([]), 1400);
+    return () => clearTimeout(t);
+  }, [categorySpend]);
 
   const budgetByCategory = useMemo(() => {
     const map = {};
@@ -176,152 +247,112 @@ export default function Overview({ householdId, onSelectAccount, onViewSpending 
     return map;
   }, [budgets]);
 
-  function startEditBudget(cat, current) {
-    setEditingBudgetCat(cat);
-    setBudgetDraft(current != null ? String(current) : '');
+  async function refreshBudgets() {
+    const { budgetRows } = await load();
+    setBudgets(budgetRows);
   }
 
-  async function saveBudgetFor(cat) {
-    const val = parseFloat(budgetDraft);
-    if (Number.isNaN(val) || val < 0) return;
+  async function saveBudgetFor(cat, val) {
     try {
       await setBudget(householdId, cat, val);
+      await refreshBudgets();
       setEditingBudgetCat(null);
-      await reload();
+      setFlashCats([cat]);
+      toast(`${cat} budget set to ${fmtCAD(val)} a month`);
     } catch (err) {
-      setError(err.message);
+      toast(`Couldn't save the ${cat} budget: ${err.message}`, { error: true });
     }
   }
 
   async function clearBudgetFor(cat) {
     try {
       await removeBudget(householdId, cat);
+      await refreshBudgets();
       setEditingBudgetCat(null);
-      await reload();
+      toast(`Removed the ${cat} budget`);
     } catch (err) {
-      setError(err.message);
+      toast(`Couldn't remove the ${cat} budget: ${err.message}`, { error: true });
     }
   }
 
-  if (error) return <ErrorState message={`Couldn't load overview: ${error}`} />;
-  if (!accounts || !rules || !transactions) return <LoadingState />;
-
   const heroValue = horizon === 'payday' ? safeToSpend : projectedFreeCash;
   const heroMax = horizon === 'payday' ? cashOnHand : (cashOnHand + incomeThroughHorizon);
-  const heroColor = heroValue < 0 ? RUST : PINE;
+  const shownHero = useCountUp(accounts ? heroValue : null);
+
+  if (error && !accounts) return <ErrorState message={`Couldn't load overview: ${error}`} />;
+  if (!accounts || !rules || !transactions) return <LoadingState />;
+
+  const meterPct = heroMax > 0 ? Math.max(0, Math.min(heroValue / heroMax, 1)) * 100 : 0;
+  const heroSub = horizon === 'payday'
+    ? (nextPayrollDate ? `Payday ${paydayLabel(nextPayrollDate)} · in ${daysToPayday} day${daysToPayday === 1 ? '' : 's'}` : 'No upcoming payday found on Infinity')
+    : `After ${fmtCAD(committedThroughHorizon)} in bills and ${fmtCAD(incomeThroughHorizon)} income`;
 
   return (
-    <div>
-      <div style={{ background: PINE, borderRadius: 20, padding: 22, marginBottom: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)' }}>
-            {horizon === 'payday' ? 'Safe to spend' : 'Projected free cash'}
-          </div>
-          <select value={horizon} onChange={e => setHorizon(e.target.value)} style={s.field}>
-            <option value="payday">By next payday</option>
-            {horizonMonths.map(ym => <option key={ym} value={ym}>End of {monthLabel(ym)}</option>)}
-          </select>
+    <>
+      <section className="hero" aria-labelledby="hero-label">
+        <div className="hero-top">
+          <span className="t-12 caps hero-soft" id="hero-label">{horizon === 'payday' ? 'Safe to spend' : 'Projected free cash'}</span>
+          <span className="hero-select">
+            <label className="sr-only" htmlFor="hero-horizon">Horizon</label>
+            <select id="hero-horizon" value={horizon} onChange={e => setHorizon(e.target.value)}>
+              <option value="payday">By next payday</option>
+              {horizonMonths.map(ym => <option key={ym} value={ym}>End of {monthLabel(ym)}</option>)}
+            </select>
+            <IconChevronDown />
+          </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 10 }}>
-          <ProgressRing value={heroValue} max={heroMax} size={104} strokeWidth={10} color="#FFFFFF" trackColor="rgba(255,255,255,0.2)">
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: '#FFFFFF', textAlign: 'center', lineHeight: 1.2 }}>
-              {fmtCAD(heroValue)}
-            </div>
-          </ProgressRing>
-          <div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6 }}>
-              out of <span style={{ ...s.num, fontWeight: 700, color: '#FFFFFF' }}>{fmtCAD(heroMax)}</span>
-            </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
-              Committed: <span style={{ ...s.num, fontWeight: 700, color: '#FFFFFF' }}>{fmtCAD(committedThroughHorizon)}</span>
-            </div>
-          </div>
+        <div className="hero-value t-44 display">{fmtCAD(shownHero)}</div>
+        <div className="t-14 hero-soft">{heroSub}</div>
+        <div className="meter" aria-hidden="true"><i style={{ width: `${meterPct}%` }} /></div>
+        <div className="hero-legend t-12 hero-soft">
+          <span>Bills <b><Money value={committedThroughHorizon} /></b></span>
+          <span>{horizon === 'payday' ? 'Cash' : 'Cash + income'} <b><Money value={heroMax} /></b></span>
         </div>
-      </div>
+        {heroValue < 0 && <span className="chip is-neg" style={{ alignSelf: 'flex-start' }}>Bills exceed cash by {fmtCAD(-heroValue)}</span>}
+      </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <div style={{ background: 'var(--card)', border: '0.5px solid var(--line)', borderLeft: `3px solid ${GOLD}`, borderRadius: '0 16px 16px 0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <IconClock color={GOLD} />
-          <div>
-            <div style={s.label}>Days to payday</div>
-            <div style={{ ...s.num, fontSize: 22, fontWeight: 700, color: 'var(--ink)' }}>{daysToPayday ?? '—'}</div>
+      <div className="overview-grid">
+        <section className="card is-compact is-grouped" aria-labelledby="accounts-h">
+          <div className="card-head">
+            <h2 className="t-14 semi" id="accounts-h">Accounts</h2>
+            <span className="t-12 muted">Net <Money value={netWorth} className="semi" style={{ color: 'var(--ink)' }} /></span>
           </div>
-        </div>
-        <div style={{ background: 'var(--card)', border: '0.5px solid var(--line)', borderLeft: `3px solid ${PINE}`, borderRadius: '0 16px 16px 0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <IconWallet color={PINE} />
-          <div>
-            <div style={s.label}>Cash on hand</div>
-            <div style={{ ...s.num, fontSize: 22, fontWeight: 700, color: cashOnHand < 100 ? RUST : 'var(--ink)' }}>{fmtCAD(cashOnHand)}</div>
+          <ul className="rows is-compact">
+            {accounts.map(a => <AccountRow key={a.id} account={a} balance={balances[a.id]} onSelect={onSelectAccount} />)}
+          </ul>
+        </section>
+
+        <section className="card is-grouped" aria-labelledby="spending-h">
+          <div className="card-head">
+            <h2 className="t-16 semi" id="spending-h">{monthLabel(thisMonthYm)} spending</h2>
+            {onViewSpending && (
+              <button type="button" className="btn btn-quiet btn-sm" onClick={onViewSpending}>History<IconChevronRight /></button>
+            )}
           </div>
-        </div>
-      </div>
-
-      <div style={{ ...s.card, padding: 8, marginBottom: 14 }}>
-        {accounts.map(a => {
-          const { Icon, color } = accountVisual(a.type);
-          return (
-            <div
-              key={a.id}
-              onClick={() => onSelectAccount && onSelectAccount(a.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 14, cursor: onSelectAccount ? 'pointer' : 'default' }}
-              title={onSelectAccount ? `View ${a.name}'s transactions` : undefined}
-            >
-              <span style={{ width: 34, height: 34, borderRadius: '50%', background: PINE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon color={color} />
-              </span>
-              <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{a.name}</span>
-              <span style={{ ...s.num, fontWeight: 700, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
-              {onSelectAccount && <IconChevronRight color="var(--ink-soft)" />}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={s.card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <div style={s.label}>Spending by category · {monthLabel(thisMonthYm)}</div>
-          {onViewSpending && (
-            <button
-              onClick={onViewSpending}
-              style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}
-            >History &amp; search →</button>
+          <div className="card-sub t-14 muted"><Money value={monthSpendTotal} className="semi" style={{ color: 'var(--ink)' }} /> so far this month</div>
+          {categorySpend.length === 0 ? (
+            <div className="t-14 muted">No spending yet this month.</div>
+          ) : (
+            <ul className="cats">
+              {categorySpend.map(([cat, amt]) => (
+                <CategoryRow
+                  key={cat}
+                  cat={cat}
+                  amount={amt}
+                  budget={budgetByCategory[cat]}
+                  maxSpend={maxCategorySpend}
+                  editing={editingBudgetCat === cat}
+                  onEdit={() => setEditingBudgetCat(cat)}
+                  onCancel={() => setEditingBudgetCat(null)}
+                  onSave={saveBudgetFor}
+                  onRemove={clearBudgetFor}
+                  flash={flashCats.includes(cat)}
+                />
+              ))}
+            </ul>
           )}
-        </div>
-          {categorySpend.length === 0 && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>Nothing this month.</div>}
-          {categorySpend.map(([cat, amt]) => {
-            const budget = budgetByCategory[cat];
-            const overBudget = budget != null && amt > budget;
-            return (
-              <div key={cat} style={{ marginTop: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 4, gap: 6 }}>
-                  <span style={{ fontWeight: 500 }}>{cat}</span>
-                  <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ ...s.num, fontWeight: 700, color: overBudget ? RUST : 'var(--ink)' }}>
-                      {fmtCAD(amt)}{budget != null ? ` / ${fmtCAD(budget)}` : ''}
-                    </span>
-                    {editingBudgetCat !== cat && (
-                      <button style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 10.5, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => startEditBudget(cat, budget)}>
-                        {budget != null ? 'edit' : 'set budget'}
-                      </button>
-                    )}
-                  </span>
-                </div>
-                {editingBudgetCat === cat ? (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                    <input style={{ ...s.field, width: 90 }} type="number" value={budgetDraft} onChange={e => setBudgetDraft(e.target.value)} autoFocus placeholder="$ limit" />
-                    <button style={{ background: PINE, color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }} onClick={() => saveBudgetFor(cat)}>Save</button>
-                    {budget != null && <button style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }} onClick={() => clearBudgetFor(cat)}>Remove</button>}
-                    <button style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 11, cursor: 'pointer' }} onClick={() => setEditingBudgetCat(null)}>Cancel</button>
-                  </div>
-                ) : (
-                  <div style={{ height: 7, background: PINE_SOFT, borderRadius: 6, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min((amt / (budget || maxCategorySpend)) * 100, 100)}%`, background: overBudget ? RUST : PINE, borderRadius: 6 }} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-    </div>
+        </section>
+      </div>
+    </>
   );
 }

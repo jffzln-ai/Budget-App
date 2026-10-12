@@ -1,196 +1,253 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { getAccounts, getNetWorthItems, addNetWorthItem, removeNetWorthItem, computeLiveBalances, getAccountDeletionImpact, deleteAccount } from './lib/queries.js';
 import { LoadingState, ErrorState } from './lib/states.jsx';
+import { useToast } from './lib/toast.jsx';
+import { useCountUp } from './lib/useCountUp.js';
+import { AccountRow, DebtAwareAmount, Money, fmtCAD } from './lib/accounts.jsx';
+import { IconMoreVertical, IconClose } from './lib/icons.jsx';
 
 const NET_WORTH_CATEGORIES = {
   asset: ['Real Estate', 'Vehicle', 'RRSP (External)', 'Other Investment', 'Other Asset'],
   liability: ['Mortgage', 'Auto Loan', 'Personal Loan', 'Other Liability'],
 };
 
-function fmtCAD(n) {
-  if (n === null || n === undefined) return '—';
-  return '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function todayLabel() {
+  return new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-const s = {
-  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
-  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' },
-};
-const PINE = 'var(--pine)';
-const RUST = 'var(--rust)';
-
-export default function NetWorth({ householdId }) {
+export default function NetWorth({ householdId, refreshKey = 0 }) {
+  const toast = useToast();
   const [accounts, setAccounts] = useState(null);
   const [netWorthItems, setNetWorthItems] = useState([]);
   const [error, setError] = useState(null);
   const [form, setForm] = useState({ name: '', type: 'asset', category: 'Real Estate', value: '' });
+  const [formOpen, setFormOpen] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [menuFor, setMenuFor] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // { account, impact } | null
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const nameRef = useRef(null);
 
   async function load() {
     try {
       const [accs, items] = await Promise.all([getAccounts(householdId), getNetWorthItems(householdId)]);
       setAccounts(accs);
       setNetWorthItems(items);
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
   }
 
-  useEffect(() => { load(); }, [householdId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [householdId, refreshKey]);
 
-  async function handleAdd() {
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = e => { if (!e.target.closest('[data-row-menu]')) setMenuFor(null); };
+    const esc = e => { if (e.key === 'Escape') setMenuFor(null); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [menuFor]);
+
+  useEffect(() => { if (formOpen) nameRef.current?.focus(); }, [formOpen]);
+
+  async function handleAdd(e) {
+    e.preventDefault();
     const val = parseFloat(form.value);
-    if (!form.name.trim() || Number.isNaN(val) || val < 0) return;
+    if (!form.name.trim()) { setFormError('Give it a name.'); return; }
+    if (Number.isNaN(val) || val < 0) { setFormError('Enter a value of $0 or more.'); return; }
+    setFormError(null);
     setSaving(true);
     try {
       await addNetWorthItem(householdId, { name: form.name.trim(), type: form.type, category: form.category, value: val });
-      setForm({ ...form, name: '', value: '' });
+      setForm(f => ({ ...f, name: '', value: '' }));
       await load();
+      toast(`Added ${form.name.trim()}`);
     } catch (err) {
-      setError(err.message);
+      toast(`Couldn't add it: ${err.message}`, { error: true });
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleRemove(id) {
+  async function handleRemove(item) {
     try {
-      await removeNetWorthItem(id);
+      await removeNetWorthItem(item.id);
       await load();
+      toast(`Removed ${item.name}`);
     } catch (err) {
-      setError(err.message);
+      toast(`Couldn't remove ${item.name}: ${err.message}`, { error: true });
     }
   }
 
   async function startDeleteAccount(account) {
-    setError(null);
+    setMenuFor(null);
     try {
       const impact = await getAccountDeletionImpact(account.id);
       setDeleteTarget({ account, impact });
       setConfirmText('');
     } catch (err) {
-      setError(err.message);
+      toast(`Couldn't check what deleting ${account.name} affects: ${err.message}`, { error: true });
     }
   }
 
   async function confirmDeleteAccount() {
     if (!deleteTarget) return;
+    const name = deleteTarget.account.name;
     setDeleteBusy(true);
     try {
       await deleteAccount(deleteTarget.account.id);
       setDeleteTarget(null);
       await load();
+      toast(`Deleted ${name}`);
     } catch (err) {
-      setError(err.message);
+      toast(`Couldn't delete ${name}: ${err.message}`, { error: true });
     } finally {
       setDeleteBusy(false);
     }
   }
 
-  if (error) return <ErrorState message={error} />;
-  if (!accounts) return <LoadingState />;
-
-  const balances = computeLiveBalances(accounts);
-  const accountAssetsTotal = accounts.reduce((sum, a) => sum + Math.max(balances[a.id] || 0, 0), 0);
-  const accountLiabilitiesTotal = Math.abs(accounts.reduce((sum, a) => sum + Math.min(balances[a.id] || 0, 0), 0));
+  const balances = accounts ? computeLiveBalances(accounts) : {};
+  const accountAssetsTotal = (accounts || []).reduce((sum, a) => sum + Math.max(balances[a.id] || 0, 0), 0);
+  const accountLiabilitiesTotal = Math.abs((accounts || []).reduce((sum, a) => sum + Math.min(balances[a.id] || 0, 0), 0));
   const manualAssetsTotal = netWorthItems.filter(i => i.type === 'asset').reduce((sum, i) => sum + i.value, 0);
   const manualLiabilitiesTotal = netWorthItems.filter(i => i.type === 'liability').reduce((sum, i) => sum + i.value, 0);
   const totalAssets = accountAssetsTotal + manualAssetsTotal;
   const totalLiabilities = accountLiabilitiesTotal + manualLiabilitiesTotal;
   const netWorth = totalAssets - totalLiabilities;
+  const shownNet = useCountUp(accounts ? netWorth : null);
+
+  if (error && !accounts) return <ErrorState message={`Couldn't load net worth: ${error}`} />;
+  if (!accounts) return <LoadingState />;
+
+  const assetShare = totalAssets + totalLiabilities > 0 ? (totalAssets / (totalAssets + totalLiabilities)) * 100 : 0;
 
   return (
-    <div>
-      <div style={{ ...s.card, marginBottom: 14 }}>
-        <div style={s.label}>Net worth</div>
-        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 38, fontWeight: 600, color: netWorth < 0 ? RUST : PINE }}>{fmtCAD(netWorth)}</div>
-        <div style={{ display: 'flex', gap: 28, marginTop: 16 }}>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>Total assets</div>
-            <div style={{ ...s.num, fontSize: 19, fontWeight: 700, color: PINE, marginTop: 2 }}>{fmtCAD(totalAssets)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>Total liabilities</div>
-            <div style={{ ...s.num, fontSize: 19, fontWeight: 700, color: RUST, marginTop: 2 }}>{fmtCAD(totalLiabilities)}</div>
-          </div>
-        </div>
-      </div>
+    <div className="stack">
+      <span className="t-14 muted" style={{ marginTop: -8 }}>As of {todayLabel()}</span>
 
-      <div style={{ ...s.card, marginBottom: 14 }}>
-        <div style={s.label}>Accounts</div>
-        {accounts.map(a => (
-          <div key={a.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line-soft)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, gap: 10 }}>
-              <span>{a.name}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...s.num, fontWeight: 600, color: (balances[a.id] || 0) < 0 ? RUST : 'var(--ink)' }}>{fmtCAD(balances[a.id])}</span>
-                <button onClick={() => startDeleteAccount(a)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline' }}>Delete</button>
-              </div>
-            </div>
-            {deleteTarget && deleteTarget.account.id === a.id && (
-              <div style={{ marginTop: 10, padding: 14, background: 'rgba(156,74,52,0.08)', border: '1px solid var(--rust)', borderRadius: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--rust)' }}>Delete "{a.name}" permanently?</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.6, marginBottom: 10 }}>
-                  This will permanently delete <strong>{deleteTarget.impact.transactions}</strong> transaction{deleteTarget.impact.transactions === 1 ? '' : 's'}
-                  {deleteTarget.impact.plannedTransactions > 0 && <> and <strong>{deleteTarget.impact.plannedTransactions}</strong> planned expense{deleteTarget.impact.plannedTransactions === 1 ? '' : 's'}</>}
-                  {deleteTarget.impact.recurringRules > 0 && <>, and remove <strong>{deleteTarget.impact.recurringRules}</strong> recurring bill{deleteTarget.impact.recurringRules === 1 ? '' : 's'} tracked on this account</>}.
-                  {a.plaid_item_id && <> This account is connected via Plaid - future syncs for it will stop once it's deleted.</>}
-                  {' '}This cannot be undone.
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 6 }}>Type the account name to confirm: <strong>{a.name}</strong></div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input style={{ ...s.field, flex: 1, minWidth: 140 }} value={confirmText} onChange={e => setConfirmText(e.target.value)} autoFocus />
+      <section className="hero" aria-labelledby="nw-label">
+        <span className="t-12 caps hero-soft" id="nw-label">Assets less liabilities</span>
+        <span className="hero-value t-44 display">{fmtCAD(shownNet)}</span>
+        <div className="split" aria-hidden="true"><i style={{ width: `${assetShare}%` }} /></div>
+        <div className="hero-legend t-12 hero-soft">
+          <span>Assets <b><Money value={totalAssets} /></b></span>
+          <span>Owed <b><Money value={totalLiabilities} /></b></span>
+        </div>
+        {netWorth < 0 && <span className="chip is-neg" style={{ alignSelf: 'flex-start' }}>You owe more than you own</span>}
+      </section>
+
+      <section className="card is-compact is-grouped" aria-labelledby="nw-accounts">
+        <div className="card-head">
+          <h2 className="t-14 semi" id="nw-accounts">Accounts</h2>
+          <span className="t-12 muted">{accounts.length}</span>
+        </div>
+        <ul className="rows is-compact">
+          {accounts.map(a => (
+            <AccountRow
+              key={a.id}
+              account={a}
+              balance={balances[a.id]}
+              trailing={<>
+                <div className="menu-anchor" data-row-menu>
                   <button
-                    disabled={confirmText !== a.name || deleteBusy}
-                    onClick={confirmDeleteAccount}
-                    style={{ ...s.btn, background: 'var(--rust)', opacity: confirmText === a.name ? 1 : 0.5, cursor: confirmText === a.name ? 'pointer' : 'not-allowed' }}
-                  >{deleteBusy ? 'Deleting…' : 'Delete permanently'}</button>
-                  <button onClick={() => setDeleteTarget(null)} style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' }}>Cancel</button>
+                    type="button"
+                    className="btn-icon"
+                    aria-label={`More actions for ${a.name}`}
+                    aria-haspopup="menu"
+                    aria-expanded={menuFor === a.id}
+                    onClick={() => setMenuFor(menuFor === a.id ? null : a.id)}
+                  ><IconMoreVertical /></button>
+                  {menuFor === a.id && (
+                    <div className="menu" role="menu">
+                      <button type="button" role="menuitem" className="is-neg" onClick={() => startDeleteAccount(a)}>Delete account…</button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+                {deleteTarget && deleteTarget.account.id === a.id && (
+                  <div className="inline-panel is-danger" style={{ flexBasis: '100%', margin: '4px 8px 8px' }} role="alertdialog" aria-labelledby={`del-${a.id}`}>
+                    <div className="t-14 semi neg" id={`del-${a.id}`}>Delete "{a.name}" permanently?</div>
+                    <div className="t-14">
+                      This will permanently delete <strong>{deleteTarget.impact.transactions}</strong> transaction{deleteTarget.impact.transactions === 1 ? '' : 's'}
+                      {deleteTarget.impact.plannedTransactions > 0 && <> and <strong>{deleteTarget.impact.plannedTransactions}</strong> planned expense{deleteTarget.impact.plannedTransactions === 1 ? '' : 's'}</>}
+                      {deleteTarget.impact.recurringRules > 0 && <>, and remove <strong>{deleteTarget.impact.recurringRules}</strong> recurring bill{deleteTarget.impact.recurringRules === 1 ? '' : 's'} tracked on this account</>}.
+                      {a.plaid_item_id && <> This account is connected via Plaid - future syncs for it will stop once it's deleted.</>}
+                      {' '}This cannot be undone.
+                    </div>
+                    <label className="field">
+                      <span>Type <strong>{a.name}</strong> to confirm</span>
+                      <input className="input" value={confirmText} onChange={e => setConfirmText(e.target.value)} autoFocus />
+                    </label>
+                    <div className="toolbar">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ background: 'var(--neg)', color: 'var(--s1)' }}
+                        disabled={confirmText !== a.name || deleteBusy}
+                        onClick={confirmDeleteAccount}
+                      >{deleteBusy ? 'Deleting…' : 'Delete permanently'}</button>
+                      <button type="button" className="btn btn-quiet btn-sm" onClick={() => setDeleteTarget(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </>}
+            />
+          ))}
+        </ul>
+      </section>
 
-      <div style={s.card}>
-        <div style={s.label}>Other assets & liabilities</div>
-        {netWorthItems.length === 0 && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 }}>Nothing added yet - real estate, vehicles, external RRSPs, loans, anything not already one of your tracked accounts.</div>}
-        {netWorthItems.map(item => (
-          <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--line-soft)' }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{item.category}</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ ...s.num, fontWeight: 700, color: item.type === 'liability' ? RUST : PINE }}>{item.type === 'liability' ? '−' : ''}{fmtCAD(item.value)}</span>
-              <button onClick={() => handleRemove(item.id)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 12 }}>Remove</button>
-            </div>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 14 }}>
-          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Name</div><input style={s.field} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Honda Civic" /></div>
-          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Type</div>
-            <select style={s.field} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, category: NET_WORTH_CATEGORIES[e.target.value][0] }))}>
-              <option value="asset">Asset</option>
-              <option value="liability">Liability</option>
-            </select>
-          </div>
-          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Category</div>
-            <select style={s.field} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-              {NET_WORTH_CATEGORIES[form.type].map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 3 }}>Value</div><input style={{ ...s.field, width: 100 }} type="number" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="$" /></div>
-          <button style={s.btn} disabled={saving} onClick={handleAdd}>{saving ? 'Saving…' : 'Add'}</button>
+      <section className="card is-compact" aria-labelledby="nw-other">
+        <div className="card-head">
+          <h2 className="t-14 semi" id="nw-other">Other assets &amp; liabilities</h2>
+          <button type="button" className="btn btn-secondary btn-sm" aria-expanded={formOpen} onClick={() => setFormOpen(v => !v)}>{formOpen ? 'Close' : 'Add'}</button>
         </div>
-      </div>
+        {netWorthItems.length === 0 && !formOpen && (
+          <div className="t-14 muted">Nothing added yet. Add real estate, vehicles, external RRSPs, loans, or anything that isn't already a tracked account.</div>
+        )}
+        {netWorthItems.length > 0 && (
+          <ul className="rows is-compact">
+            {netWorthItems.map(item => (
+              <li key={item.id} style={{ display: 'flex', alignItems: 'center' }}>
+                <div className="row" style={{ cursor: 'default', flex: 1, minWidth: 0 }}>
+                  <span className="row-main">
+                    <span className="row-title t-14 semi">{item.name}</span>
+                    <span className="row-sub t-12 muted">{item.category}</span>
+                  </span>
+                  <DebtAwareAmount value={item.value} isDebt={item.type === 'liability'} />
+                </div>
+                <button type="button" className="btn-icon" aria-label={`Remove ${item.name}`} onClick={() => handleRemove(item)}><IconClose /></button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {formOpen && (
+          <form className="inline-panel" onSubmit={handleAdd} noValidate>
+            <div className="form-row">
+              <label className="field"><span>Name</span><input ref={nameRef} className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Honda Civic" /></label>
+              <label className="field"><span>Type</span>
+                <select className="input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, category: NET_WORTH_CATEGORIES[e.target.value][0] }))}>
+                  <option value="asset">Asset</option>
+                  <option value="liability">Liability</option>
+                </select>
+              </label>
+              <label className="field"><span>Category</span>
+                <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                  {NET_WORTH_CATEGORIES[form.type].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label className="field"><span>Value</span><input className="input" type="number" inputMode="decimal" min="0" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="$" /></label>
+            </div>
+            {formError && <div className="field-error" role="alert">{formError}</div>}
+            <div className="toolbar">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>{saving ? 'Saving…' : 'Add'}</button>
+            </div>
+          </form>
+        )}
+      </section>
     </div>
   );
 }

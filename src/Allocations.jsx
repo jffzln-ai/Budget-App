@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { getAccounts, getAllTransactions, computeLiveBalances } from './lib/queries.js';
 import { LoadingState, ErrorState } from './lib/states.jsx';
 
 function fmtCAD(n) {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined) return 'â€”';
   return '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 20, padding: 22, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
+  card: { background: 'var(--card)', borderRadius: 16, padding: 22, boxShadow: 'var(--e1)' },
   label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
+  num: { fontFamily: 'var(--font)', fontVariantNumeric: 'tabular-nums' },
   field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
 };
 
@@ -20,7 +20,7 @@ function monthLabel(ym) {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
 }
 
-export default function Allocations({ householdId }) {
+export default function Allocations({ householdId, refreshKey = 0 }) {
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [error, setError] = useState(null);
@@ -36,7 +36,8 @@ export default function Allocations({ householdId }) {
     }
   }
 
-  useEffect(() => { load(); }, [householdId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [householdId, refreshKey]);
 
   if (error) return <ErrorState message={error} />;
   if (!accounts || !transactions) return <LoadingState />;
@@ -67,18 +68,18 @@ export default function Allocations({ householdId }) {
           const outflow = Math.abs(accTxns.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
           return (
             <div key={a.id} style={s.card}>
-              <div style={s.label}>{a.name}{a.purpose === 'rental' ? ' · Rental' : ''}</div>
-              <div style={{ ...s.num, fontSize: 24, fontWeight: 700, color: 'var(--pine)' }}>{fmtCAD(balance)}</div>
-              {month !== 'all' && <div style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 2 }}>current balance · activity below is {monthLabel(month)} only</div>}
+              <div style={s.label}>{a.name}{a.purpose === 'rental' ? ' Â· Rental' : ''}</div>
+              <div style={{ ...s.num, fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>{fmtCAD(balance)}</div>
+              {month !== 'all' && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>current balance Â· activity below is {monthLabel(month)} only</div>}
               <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 12, color: 'var(--ink-soft)' }}>
                 <span>In: <span style={{ ...s.num, color: 'var(--pine)' }}>{fmtCAD(inflow)}</span></span>
                 <span>Out: <span style={{ ...s.num, color: 'var(--rust)' }}>{fmtCAD(outflow)}</span></span>
               </div>
               <div style={{ marginTop: 10 }}>
                 {accTxns.slice(0, month === 'all' ? 4 : 12).map(t => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, padding: '4px 0', borderTop: '1px solid var(--line-soft)' }}>
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--line-soft)' }}>
                     <span style={{ color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{t.raw_description}</span>
-                    <span style={{ ...s.num, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{t.amount < 0 ? '−' : '+'}{fmtCAD(t.amount)}</span>
+                    <span style={{ ...s.num, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{t.amount < 0 ? 'âˆ’' : '+'}{fmtCAD(t.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -88,8 +89,8 @@ export default function Allocations({ householdId }) {
         {tfsa && (
           <div style={s.card}>
             <div style={s.label}>{tfsa.name}</div>
-            <div style={{ ...s.num, fontSize: 24, fontWeight: 700, color: 'var(--pine)' }}>{fmtCAD(tfsa.current_balance)}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8, lineHeight: 1.5 }}>Holdings snapshot only.</div>
+            <div style={{ ...s.num, fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>{fmtCAD(tfsa.current_balance)}</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, lineHeight: 1.5 }}>Holdings snapshot only.</div>
           </div>
         )}
       </div>

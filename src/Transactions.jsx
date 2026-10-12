@@ -5,8 +5,9 @@ import {
   getCustomCategories, addCustomCategory, getCategoryRules, setCategoryRule, removeCategoryRule, applyCategoryToMatching,
   linkTransfer,
 } from './lib/queries.js';
-import { LoadingState, ErrorState } from './lib/states.jsx';
-import { IconTrendingUp, IconTrendingDown } from './lib/icons.jsx';
+import { LoadingState, ErrorState, EmptyState } from './lib/states.jsx';
+import { useToast } from './lib/toast.jsx';
+import { IconCheck, IconPencil, IconFilter, IconSearch } from './lib/icons.jsx';
 
 function fmtCAD(n) {
   if (n === null || n === undefined) return '—';
@@ -22,16 +23,6 @@ function fmtDate(iso) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-
-const s = {
-  card: { background: 'var(--card)', borderRadius: 20, boxShadow: '0 1px 3px rgba(27,33,29,0.04)' },
-  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
-  num: { fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' },
-  smallBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
-  primaryBtn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
-};
-const PINE_SOFT = 'var(--pine-soft)';
-const CREAM_TINT = 'var(--cream-tint)';
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function ymKey(date) { return date.slice(0, 7); }
@@ -70,7 +61,8 @@ function periodRange(period, today) {
   }
 }
 
-export default function Transactions({ householdId, initialAccountFilter, onConsumeInitialFilter, initialBreakdownOpen, onConsumeInitialBreakdownOpen }) {
+export default function Transactions({ householdId, refreshKey = 0, initialAccountFilter, onConsumeInitialFilter, initialBreakdownOpen, onConsumeInitialBreakdownOpen }) {
+  const toast = useToast();
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [tags, setTags] = useState({});
@@ -112,12 +104,17 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       setTags(tagMap);
       setCustomCategories(customCats);
       setCategoryRules(rules);
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
   }
 
-  useEffect(() => { load(); }, [householdId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [householdId, refreshKey]);
+
+  // Action failures are reported as a toast; the list stays on screen.
+  const fail = (what, err) => toast(`${what}: ${err.message}`, { error: true });
 
   useEffect(() => {
     if (initialAccountFilter) {
@@ -242,7 +239,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       setLinkingId(null);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyId(null);
     }
@@ -284,7 +281,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       checkForBulkApply(txn, category);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyId(null);
     }
@@ -302,7 +299,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       checkForBulkApply(txn, name);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyId(null);
     }
@@ -316,7 +313,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       setPendingBulkApply(null);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     }
   }
 
@@ -325,7 +322,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       await removeCategoryRule(householdId, pattern);
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     }
   }
 
@@ -357,7 +354,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     setBulkCategoryChoice('');
     await load();
     setBulkBusy(false);
-    if (failed) setError(`${failed} transaction${failed === 1 ? '' : 's'} couldn't be recategorized.`);
+    if (failed) toast(`${failed} transaction${failed === 1 ? '' : 's'} couldn't be recategorized.`, { error: true });
   }
 
   async function handleBulkAccount() {
@@ -371,7 +368,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
     setBulkAccountChoice('');
     await load();
     setBulkBusy(false);
-    if (failed) setError(`${failed} transaction${failed === 1 ? '' : 's'} couldn't be moved - most likely an identical transaction already exists on that account.`);
+    if (failed) toast(`${failed} transaction${failed === 1 ? '' : 's'} couldn't be moved - most likely an identical transaction already exists on that account.`, { error: true });
   }
 
   async function toggleReconciled(txn) {
@@ -382,7 +379,7 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       else await addTransactionTag(txn.id, 'reconciled');
       await load();
     } catch (err) {
-      setError(err.message);
+      fail("Couldn't save that change", err);
     } finally {
       setBusyId(null);
     }
@@ -409,9 +406,9 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
       // one already on the target account, surface that plainly rather than
       // a raw constraint-violation message.
       if (err.message && err.message.includes('duplicate key')) {
-        setError('An identical transaction already exists on that account - this looks like it may already be recorded there.');
+        toast('An identical transaction already exists on that account - this looks like it may already be recorded there.', { error: true });
       } else {
-        setError(err.message);
+        fail("Couldn't save that change", err);
       }
     } finally {
       setBusyId(null);
@@ -420,295 +417,303 @@ export default function Transactions({ householdId, initialAccountFilter, onCons
 
   const activeFilterCount = [accountFilter !== 'all', categoryFilter !== 'all', period !== 'all', showTransfers, unmatchedOnly].filter(Boolean).length;
 
-  if (error) return <ErrorState message={`Couldn't load transactions: ${error}`} />;
+  if (error && !transactions) return <ErrorState message={`Couldn't load transactions: ${error}`} />;
   if (!transactions || !accounts) return <LoadingState label="Loading transactions…" />;
 
-  return (
-    <div style={s.card}>
-      <div style={{ padding: 16, borderBottom: '1px solid var(--line)' }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input style={{ ...s.field, flex: 1 }} placeholder="Search description…" value={q} onChange={e => setQ(e.target.value)} />
-          <button
-            onClick={() => setFiltersOpen(v => !v)}
-            style={{
-              ...s.smallBtn, display: 'flex', alignItems: 'center', gap: 6,
-              background: filtersOpen ? 'var(--cream-tint)' : 'none',
-            }}
-          >
-            Filters
-            {activeFilterCount > 0 && (
-              <span style={{ background: 'var(--pine)', color: 'var(--hero-text)', borderRadius: '50%', width: 16, height: 16, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-        </div>
+  // filtered is already newest-first, so consecutive rows with the same date form a day.
+  const dayGroups = [];
+  filtered.forEach(t => {
+    const last = dayGroups[dayGroups.length - 1];
+    if (last && last.date === t.date) last.rows.push(t);
+    else dayGroups.push({ date: t.date, rows: [t] });
+  });
+  const allVisibleSelected = filtered.length > 0 && filtered.every(t => selectedIds.has(t.id));
+  const dayLabel = d => new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric', year: d.slice(0, 4) === today.slice(0, 4) ? undefined : 'numeric' });
 
-        {filtersOpen && (
-          <div style={{ marginTop: 12, padding: 14, background: 'var(--cream-tint)', borderRadius: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select style={s.field} value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
-              <option value="all">All accounts</option>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <select style={s.field} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-              <option value="all">All categories</option>
-              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select style={s.field} value={period} onChange={e => setPeriod(e.target.value)}>
-              <option value="all">All time</option>
-              {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
-              <option value="this_month">This month</option>
-              <option value="last_month">Last month</option>
-              <option value="last_3_months">Last 3 months</option>
-              <option value="last_6_months">Last 6 months</option>
-              <option value="last_12_months">Last 12 months</option>
-              <option value="ytd">Year to date</option>
-              <option value="last_year">Last year ({Number(today.slice(0, 4)) - 1})</option>
-              <option value="custom">Custom range…</option>
-              {availableMonths.length > 0 && (
-                <optgroup label="Specific month">
-                  {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
-                </optgroup>
+  function renderTxn(t) {
+    const isReconciled = (tags[t.id] || []).includes('reconciled');
+    const isEditingCat = editingCategoryId === t.id;
+    const isAddingNewCat = addingCategoryForId === t.id;
+    const isEditingDetails = editingDetailsId === t.id;
+    const busy = busyId === t.id;
+    const selected = selectedIds.has(t.id);
+    const label = t.raw_description;
+    return (
+      <div key={t.id} className={`txn${selected ? ' is-selected' : ''}`}>
+        {isEditingDetails ? (
+          <form className="form-row" onSubmit={e => { e.preventDefault(); saveDetails(t); }}>
+            <label className="field" style={{ flexBasis: 200 }}><span>Description</span>
+              <input className="input" value={detailsDraft.raw_description} onChange={e => setDetailsDraft(d => ({ ...d, raw_description: e.target.value }))} autoFocus />
+            </label>
+            <label className="field"><span>Date</span>
+              <input className="input" type="date" value={detailsDraft.date} onChange={e => setDetailsDraft(d => ({ ...d, date: e.target.value }))} />
+            </label>
+            <label className="field"><span>Amount</span>
+              <input className="input" type="number" inputMode="decimal" value={detailsDraft.amount} onChange={e => setDetailsDraft(d => ({ ...d, amount: e.target.value }))} />
+            </label>
+            <label className="field"><span>Account</span>
+              <select className="input" value={detailsDraft.account_id} onChange={e => setDetailsDraft(d => ({ ...d, account_id: e.target.value }))}>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </label>
+            <div className="toolbar">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setEditingDetailsId(null)}>Cancel</button>
+            </div>
+          </form>
+        ) : (
+          <div className="txn-line">
+            <input type="checkbox" checked={selected} onChange={() => toggleSelected(t.id)} aria-label={`Select ${label}`} />
+            <div className="txn-main">
+              <span className="txn-desc t-14">{label}</span>
+              <div className="txn-meta">
+                {isAddingNewCat ? (
+                  <form className="toolbar" onSubmit={e => { e.preventDefault(); handleCreateAndApply(t); }}>
+                    <label className="sr-only" htmlFor={`nc-${t.id}`}>New category name</label>
+                    <input id={`nc-${t.id}`} className="input input-sm" autoFocus value={newCategoryForm.name} onChange={e => setNewCategoryForm(f => ({ ...f, name: e.target.value }))} placeholder="Category name" />
+                    <label className="sr-only" htmlFor={`ng-${t.id}`}>Category group</label>
+                    <input id={`ng-${t.id}`} className="input input-sm" style={{ width: 90 }} value={newCategoryForm.group} onChange={e => setNewCategoryForm(f => ({ ...f, group: e.target.value }))} placeholder="Group" />
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Add</button>
+                    <button type="button" className="btn btn-quiet btn-sm" onClick={() => setAddingCategoryForId(null)}>Cancel</button>
+                  </form>
+                ) : isEditingCat ? (
+                  <>
+                    <label className="sr-only" htmlFor={`cat-${t.id}`}>Category for {label}</label>
+                    <select
+                      id={`cat-${t.id}`}
+                      className="input input-sm"
+                      style={{ width: 'auto' }}
+                      value={t.category}
+                      autoFocus
+                      onChange={e => {
+                        if (e.target.value === '__new__') { setEditingCategoryId(null); setAddingCategoryForId(t.id); }
+                        else handleRecategorize(t, e.target.value);
+                      }}
+                      onBlur={() => setEditingCategoryId(null)}
+                    >
+                      {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                      <option value="__new__">+ New category…</option>
+                    </select>
+                  </>
+                ) : t.is_transfer ? (
+                  <span className="chip is-muted">{t.category}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className={`chip ${t.amount > 0 ? 'is-pos' : 'is-muted'}`}
+                    onClick={() => setEditingCategoryId(t.id)}
+                    aria-label={`Category: ${t.category}. Change category`}
+                  >{t.category}</button>
+                )}
+                <span className="t-12 muted">{accountsById[t.account_id]?.name}</span>
+                {t.needs_review && <span className="chip is-warn">Unmatched transfer</span>}
+              </div>
+            </div>
+            <span className={`txn-amt t-14${t.is_transfer ? ' is-transfer' : t.amount > 0 ? ' pos' : ''}`}>{fmtCAD(t.amount)}</span>
+            <div className="txn-actions">
+              {t.is_transfer && t.needs_review && (
+                <button type="button" className="btn btn-secondary btn-sm" aria-expanded={linkingId === t.id} onClick={() => setLinkingId(linkingId === t.id ? null : t.id)}>
+                  {linkingId === t.id ? 'Cancel' : 'Link…'}
+                </button>
               )}
-            </select>
-            {period === 'custom' && (
-              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="date" style={s.field} value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
-                <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>to</span>
-                <input type="date" style={s.field} value={customTo} onChange={e => setCustomTo(e.target.value)} />
-              </span>
-            )}
-            <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
-              <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />
-              Show internal transfers
-            </label>
-            <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
-              <input type="checkbox" checked={unmatchedOnly} onChange={e => setUnmatchedOnly(e.target.checked)} />
-              Unmatched transfers only{unmatchedTransfers.length ? ` (${unmatchedTransfers.length})` : ''}
-            </label>
+              <button
+                type="button"
+                className="recon"
+                aria-pressed={isReconciled}
+                disabled={busy}
+                onClick={() => toggleReconciled(t)}
+                aria-label={isReconciled ? `Reconciled. Unmark ${label}` : `Mark ${label} as reconciled`}
+                title={isReconciled ? 'Reconciled - click to unmark' : 'Mark as reconciled'}
+              >{isReconciled && <IconCheck />}</button>
+              <button type="button" className="btn-icon" onClick={() => startEditDetails(t)} aria-label={`Edit ${label}`} title="Edit description, date, amount or account"><IconPencil /></button>
+            </div>
           </div>
         )}
+        {linkingId === t.id && (
+          <div className="inline-panel">
+            <div className="t-12 muted">Link this to its matching transfer on another account:</div>
+            {candidatesFor(t).length === 0 && <div className="t-14 muted">No other unmatched transfers to link to.</div>}
+            {candidatesFor(t).map(c => (
+              <div key={c.id} className="toolbar" style={{ justifyContent: 'space-between' }}>
+                <span className="t-12">{accountsById[c.account_id]?.name} · {fmtDate(c.date)} · {c.raw_description} · <b>{fmtCAD(c.amount)}</b></span>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busyId === t.id} onClick={() => handleLink(t, c)}>Link</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'}</div>
-          <button onClick={() => setShowManageCategories(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Manage categories</button>
-          <button onClick={() => setBreakdownOpen(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>{breakdownOpen ? 'Hide category breakdown' : 'Show category breakdown'}</button>
-          <button onClick={exportCsv} style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline', marginLeft: 'auto' }}>Export CSV</button>
-        </div>
+  return (
+    <div className={`stack${selectedIds.size ? ' has-bulkbar' : ''}`}>
+      <span className="t-14 muted" style={{ marginTop: -8 }}>{filtered.length} transaction{filtered.length === 1 ? '' : 's'} · {periodLabel}</span>
+
+      <div className="toolbar" style={{ flexWrap: 'nowrap' }}>
+        <label className="search">
+          <IconSearch />
+          <span className="sr-only">Search descriptions</span>
+          <input type="search" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} />
+        </label>
+        <button type="button" className="btn btn-secondary" aria-expanded={filtersOpen} aria-controls="txn-filters" onClick={() => setFiltersOpen(v => !v)}>
+          <IconFilter /><span>Filters</span>
+          {activeFilterCount > 0 && <span className="count-badge" aria-label={`${activeFilterCount} active`}>{activeFilterCount}</span>}
+        </button>
+      </div>
+
+      {filtersOpen && (
+        <section className="card" id="txn-filters" aria-label="Filters">
+          <div className="filter-panel">
+            <label className="field"><span>Account</span>
+              <select className="input" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}>
+                <option value="all">All accounts</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Category</span>
+              <select className="input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+                <option value="all">All categories</option>
+                {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Period</span>
+              <select className="input" value={period} onChange={e => setPeriod(e.target.value)}>
+                <option value="all">All time</option>
+                {lastPaydayDate && <option value="pay_period">This pay period (since {fmtDate(lastPaydayDate)})</option>}
+                <option value="this_month">This month</option>
+                <option value="last_month">Last month</option>
+                <option value="last_3_months">Last 3 months</option>
+                <option value="last_6_months">Last 6 months</option>
+                <option value="last_12_months">Last 12 months</option>
+                <option value="ytd">Year to date</option>
+                <option value="last_year">Last year ({Number(today.slice(0, 4)) - 1})</option>
+                <option value="custom">Custom range…</option>
+                {availableMonths.length > 0 && (
+                  <optgroup label="Specific month">
+                    {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+            {period === 'custom' && (<>
+              <label className="field"><span>From</span><input className="input" type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} /></label>
+              <label className="field"><span>To</span><input className="input" type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} /></label>
+            </>)}
+          </div>
+          <div className="toolbar" style={{ gap: 16 }}>
+            <label className="check"><input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)} />Show internal transfers</label>
+            <label className="check"><input type="checkbox" checked={unmatchedOnly} onChange={e => setUnmatchedOnly(e.target.checked)} />Unmatched transfers only{unmatchedTransfers.length ? ` (${unmatchedTransfers.length})` : ''}</label>
+          </div>
+        </section>
+      )}
+
+      <div className="stats">
+        <div className="stat"><span className="t-12 caps muted">In</span><span className="stat-value pos">{fmtAbsCAD(totals.income)}</span></div>
+        <div className="stat"><span className="t-12 caps muted">Out</span><span className="stat-value">{fmtAbsCAD(totals.expense)}</span></div>
+        <div className="stat"><span className="t-12 caps muted">Net</span><span className={`stat-value ${totals.net < 0 ? 'neg' : 'pos'}`}>{fmtCAD(totals.net)}</span></div>
+      </div>
+
+      <div className="toolbar" style={{ gap: 4, flexWrap: 'nowrap' }}>
+        <label className="check" style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} disabled={!filtered.length} />Select all</label>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="btn btn-quiet btn-sm" aria-expanded={breakdownOpen} onClick={() => setBreakdownOpen(v => !v)}>{breakdownOpen ? 'Hide breakdown' : 'Breakdown'}</button>
+        <button type="button" className="btn btn-quiet btn-sm" aria-expanded={showManageCategories} onClick={() => setShowManageCategories(v => !v)}>Categories</button>
+        <button type="button" className="btn btn-quiet btn-sm" onClick={exportCsv} title="Download the filtered list as CSV">Export</button>
       </div>
 
       {breakdownOpen && (
-        <div style={{ padding: 16, borderBottom: '1px solid var(--line)', background: CREAM_TINT }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
-            <span>Spending by category · {periodLabel}{accountFilter !== 'all' ? ` · ${accountsById[accountFilter]?.name}` : ''}{q ? ` · "${q}"` : ''}</span>
-            <span style={s.num}>{fmtAbsCAD(categoryBreakdownTotal)}</span>
+        <section className="card" aria-labelledby="bd-h">
+          <div className="card-head">
+            <h2 className="t-16 semi" id="bd-h">Spending by category</h2>
+            <span className="t-14 semi">{fmtAbsCAD(categoryBreakdownTotal)}</span>
           </div>
-          {categoryBreakdown.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>No expenses in this range.</div>}
-          {categoryBreakdown.map(([cat, amt]) => (
-            <div key={cat} style={{ marginTop: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 4 }}>
-                <span
-                  onClick={() => setCategoryFilter(cat === categoryFilter ? 'all' : cat)}
-                  style={{ cursor: 'pointer', fontWeight: cat === categoryFilter ? 700 : 500, textDecoration: 'underline dotted', textDecorationColor: 'var(--ink-soft)' }}
-                  title="Filter the list to this category"
-                >{cat}</span>
-                <span style={{ ...s.num, fontWeight: 700 }}>{fmtAbsCAD(amt)}</span>
-              </div>
-              <div style={{ height: 6, background: 'var(--pine-soft)', borderRadius: 6, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min((amt / maxCategoryBreakdown) * 100, 100)}%`, background: 'var(--pine)', borderRadius: 6 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: CREAM_TINT }}>
-        <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input type="checkbox" checked={filtered.length > 0 && filtered.every(t => selectedIds.has(t.id))} onChange={toggleSelectAllVisible} />
-          Select all
-        </label>
-        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 8px', borderRadius: 999, background: 'var(--pine-soft)' }}>
-            <IconTrendingUp color="var(--pine)" />
-            <span style={{ ...s.num, fontSize: 12, fontWeight: 700, color: 'var(--pine)' }}>${totals.income.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 8px', borderRadius: 999, background: 'var(--line-soft)' }}>
-            <IconTrendingDown color="var(--ink)" />
-            <span style={{ ...s.num, fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>${totals.expense.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, background: totals.net < 0 ? 'rgba(156,74,52,0.14)' : 'var(--pine-soft)' }}>
-            <span style={{ ...s.num, fontSize: 12, fontWeight: 700, color: totals.net < 0 ? 'var(--rust)' : 'var(--pine)' }}>Net {fmtCAD(totals.net)}</span>
-          </span>
-        </div>
-      </div>
-
-      {selectedIds.size > 0 && (
-        <div style={{ padding: 14, borderBottom: '1px solid var(--line)', background: PINE_SOFT, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{selectedIds.size} selected</div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <select style={s.field} value={bulkCategoryChoice} onChange={e => setBulkCategoryChoice(e.target.value)}>
-              <option value="">Set category to…</option>
-              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <button style={s.primaryBtn} disabled={!bulkCategoryChoice || bulkBusy} onClick={handleBulkCategory}>{bulkBusy ? '…' : 'Apply'}</button>
-          </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <select style={s.field} value={bulkAccountChoice} onChange={e => setBulkAccountChoice(e.target.value)}>
-              <option value="">Move to account…</option>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <button style={s.primaryBtn} disabled={!bulkAccountChoice || bulkBusy} onClick={handleBulkAccount}>{bulkBusy ? '…' : 'Apply'}</button>
-          </div>
-          <button style={s.smallBtn} onClick={() => setSelectedIds(new Set())}>Clear selection</button>
-        </div>
+          <div className="t-12 muted" style={{ marginTop: -8 }}>{periodLabel}{accountFilter !== 'all' ? ` · ${accountsById[accountFilter]?.name}` : ''}{q ? ` · "${q}"` : ''}</div>
+          {categoryBreakdown.length === 0 ? <EmptyState label="No expenses in this range." /> : (
+            <ul className="cats">
+              {categoryBreakdown.map(([cat, amt]) => (
+                <li key={cat} className="cat">
+                  <div className="cat-line">
+                    <span className="cat-name">
+                      <button
+                        type="button"
+                        className={`chip ${cat === categoryFilter ? 'is-brand' : 'is-muted'}`}
+                        aria-pressed={cat === categoryFilter}
+                        onClick={() => setCategoryFilter(cat === categoryFilter ? 'all' : cat)}
+                        title="Filter the list to this category"
+                      >{cat}</button>
+                    </span>
+                    <span className="cat-amount t-14 semi">{fmtAbsCAD(amt)}</span>
+                  </div>
+                  <div className="bar" aria-hidden="true"><i style={{ width: `${Math.min((amt / maxCategoryBreakdown) * 100, 100)}%` }} /></div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       {showManageCategories && (
-        <div style={{ padding: 16, borderBottom: '1px solid var(--line)', background: CREAM_TINT }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Custom categories</div>
-          {customCategories.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>None yet - create one by recategorizing a transaction and choosing "+ New category".</div>}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: categoryRules.length ? 16 : 0 }}>
-            {customCategories.map(c => (
-              <span key={c.name} style={{ fontSize: 12, background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 8, padding: '3px 8px' }}>
-                {c.name} <span style={{ color: 'var(--ink-soft)' }}>· {c.group_name}</span>
-              </span>
-            ))}
-          </div>
+        <section className="card" aria-labelledby="mc-h">
+          <h2 className="t-16 semi" id="mc-h" style={{ margin: 0 }}>Custom categories</h2>
+          {customCategories.length === 0 ? (
+            <div className="t-14 muted">None yet. Create one by recategorizing a transaction and choosing "+ New category".</div>
+          ) : (
+            <div className="toolbar">
+              {customCategories.map(c => <span key={c.name} className="chip is-muted">{c.name} · {c.group_name}</span>)}
+            </div>
+          )}
           {categoryRules.length > 0 && (<>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Auto-apply rules</div>
+            <h3 className="t-14 semi" style={{ margin: '8px 0 0' }}>Auto-apply rules</h3>
             {categoryRules.map(r => (
-              <div key={r.pattern} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0' }}>
-                <span>Transactions matching "{r.pattern}" → <strong>{r.category}</strong></span>
-                <button style={s.smallBtn} onClick={() => handleRemoveCategoryRule(r.pattern)}>Remove</button>
+              <div key={r.pattern} className="toolbar" style={{ justifyContent: 'space-between' }}>
+                <span className="t-14">Matching "{r.pattern}" → <strong>{r.category}</strong></span>
+                <button type="button" className="btn btn-quiet btn-sm is-neg" onClick={() => handleRemoveCategoryRule(r.pattern)}>Remove</button>
               </div>
             ))}
           </>)}
-        </div>
+        </section>
       )}
 
       {pendingBulkApply && (
-        <div style={{ padding: 14, borderBottom: '1px solid var(--line)', background: PINE_SOFT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ fontSize: 13 }}>
+        <section className="card" role="status" style={{ background: 'var(--brand-soft)', boxShadow: 'none' }}>
+          <div className="t-14">
             Also apply <strong>{pendingBulkApply.category}</strong> to <strong>{pendingBulkApply.count}</strong> other "{pendingBulkApply.pattern}" transaction{pendingBulkApply.count === 1 ? '' : 's'}?
-            <span style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}> — future imports matching this will apply automatically too.</span>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button style={s.primaryBtn} onClick={confirmBulkApply}>Apply to all {pendingBulkApply.count + 1}</button>
-            <button style={s.smallBtn} onClick={() => setPendingBulkApply(null)}>Just this one</button>
+          <div className="t-12 muted" style={{ marginTop: -8 }}>Future imports matching this will be categorized automatically too.</div>
+          <div className="toolbar">
+            <button type="button" className="btn btn-primary btn-sm" onClick={confirmBulkApply}>Apply to all {pendingBulkApply.count + 1}</button>
+            <button type="button" className="btn btn-quiet btn-sm" onClick={() => setPendingBulkApply(null)}>Just this one</button>
           </div>
-        </div>
+        </section>
       )}
 
-      <div>
-        {filtered.map(t => {
-          const isReconciled = (tags[t.id] || []).includes('reconciled');
-          const isEditingCat = editingCategoryId === t.id;
-          const isAddingNewCat = addingCategoryForId === t.id;
-          const isEditingDetails = editingDetailsId === t.id;
-          const busy = busyId === t.id;
-          return (
-            <div key={t.id} style={{
-              padding: '10px 16px', borderBottom: '1px solid var(--line)',
-              borderLeft: `3px solid ${t.is_transfer ? 'var(--line)' : t.amount > 0 ? 'var(--pine)' : 'transparent'}`,
-            }}>
-              {isEditingDetails ? (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 160 }}>
-                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Description</div>
-                    <input style={{ ...s.field, width: '100%' }} value={detailsDraft.raw_description} onChange={e => setDetailsDraft(d => ({ ...d, raw_description: e.target.value }))} autoFocus />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Date</div>
-                    <input style={s.field} type="date" value={detailsDraft.date} onChange={e => setDetailsDraft(d => ({ ...d, date: e.target.value }))} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Amount</div>
-                    <input style={{ ...s.field, width: 90 }} type="number" value={detailsDraft.amount} onChange={e => setDetailsDraft(d => ({ ...d, amount: e.target.value }))} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>Account</div>
-                    <select style={s.field} value={detailsDraft.account_id} onChange={e => setDetailsDraft(d => ({ ...d, account_id: e.target.value }))}>
-                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                  </div>
-                  <button style={s.primaryBtn} disabled={busy} onClick={() => saveDetails(t)}>{busy ? 'Saving…' : 'Save'}</button>
-                  <button style={s.smallBtn} onClick={() => setEditingDetailsId(null)}>Cancel</button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(t.id)}
-                      onChange={() => toggleSelected(t.id)}
-                      style={{ flexShrink: 0 }}
-                    />
-                    <button
-                      onClick={() => !busy && toggleReconciled(t)}
-                      title={isReconciled ? 'Reconciled - click to unmark' : 'Mark as reconciled'}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, fontSize: 16, color: isReconciled ? 'var(--pine)' : 'var(--line)' }}
-                    >●</button>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 340 }}>{t.raw_description}</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span>{fmtDate(t.date)}</span><span>·</span><span>{accountsById[t.account_id]?.name}</span><span>·</span>
-                        {isAddingNewCat ? (
-                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input style={{ ...s.field, fontSize: 11, padding: '1px 4px', width: 110 }} autoFocus value={newCategoryForm.name} onChange={e => setNewCategoryForm(f => ({ ...f, name: e.target.value }))} placeholder="category name" />
-                            <input style={{ ...s.field, fontSize: 11, padding: '1px 4px', width: 80 }} value={newCategoryForm.group} onChange={e => setNewCategoryForm(f => ({ ...f, group: e.target.value }))} placeholder="group" />
-                            <button style={s.primaryBtn} onClick={() => handleCreateAndApply(t)}>Add</button>
-                            <button style={s.smallBtn} onClick={() => setAddingCategoryForId(null)}>Cancel</button>
-                          </span>
-                        ) : isEditingCat ? (
-                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                            <select
-                              style={{ ...s.field, fontSize: 11, padding: '1px 4px' }} value={t.category} autoFocus
-                              onChange={e => {
-                                if (e.target.value === '__new__') { setEditingCategoryId(null); setAddingCategoryForId(t.id); }
-                                else handleRecategorize(t, e.target.value);
-                              }}
-                              onBlur={() => setEditingCategoryId(null)}
-                            >
-                              {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                              <option value="__new__">+ New category…</option>
-                            </select>
-                          </span>
-                        ) : (
-                          <span
-                            onClick={() => !t.is_transfer && setEditingCategoryId(t.id)}
-                            style={{ cursor: t.is_transfer ? 'default' : 'pointer', textDecoration: t.is_transfer ? 'none' : 'underline dotted', textDecorationColor: 'var(--ink-soft)' }}
-                          >{t.category}</span>
-                        )}
-                        {t.needs_review && <span style={{ color: 'var(--rust)' }}>· unmatched transfer</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                    <span style={{ ...s.num, fontSize: 14, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{fmtCAD(t.amount)}</span>
-                    {t.is_transfer && t.needs_review && (
-                      <button style={s.smallBtn} onClick={() => setLinkingId(linkingId === t.id ? null : t.id)}>{linkingId === t.id ? 'Cancel' : 'Link…'}</button>
-                    )}
-                    <button style={s.smallBtn} onClick={() => startEditDetails(t)} title="Edit description, date, or amount">Edit</button>
-                  </div>
-                </div>
-              )}
-              {linkingId === t.id && (
-                <div style={{ marginTop: 8, padding: 10, background: CREAM_TINT, border: '1px solid var(--line)', borderRadius: 12 }}>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 6 }}>Link this to its matching transfer on another account:</div>
-                  {candidatesFor(t).length === 0 && <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>No other unmatched transfers to link to.</div>}
-                  {candidatesFor(t).map(c => (
-                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 12 }}>
-                      <span>{accountsById[c.account_id]?.name} · {fmtDate(c.date)} · {c.raw_description} · <span style={s.num}>{fmtCAD(c.amount)}</span></span>
-                      <button style={s.primaryBtn} disabled={busyId === t.id} onClick={() => handleLink(t, c)}>Link</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft)' }}>No transactions match.</div>}
-      </div>
+      {filtered.length === 0 ? (
+        <div className="card"><EmptyState label="No transactions match." /></div>
+      ) : dayGroups.map(g => (
+        <div key={g.date} className="day-group">
+          <div className="day-label t-12 caps">{dayLabel(g.date)}</div>
+          <div className="list-card">{g.rows.map(renderTxn)}</div>
+        </div>
+      ))}
+
+      {selectedIds.size > 0 && (
+        <div className="bulkbar" role="region" aria-label="Bulk actions">
+          <span className="t-14 semi" style={{ marginRight: 'auto' }}>{selectedIds.size} selected</span>
+          <label className="sr-only" htmlFor="bulk-cat">Set category</label>
+          <select id="bulk-cat" value={bulkCategoryChoice} onChange={e => setBulkCategoryChoice(e.target.value)}>
+            <option value="">Category…</option>
+            {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button type="button" className="btn btn-sm btn-on-ink" disabled={!bulkCategoryChoice || bulkBusy} onClick={handleBulkCategory}>{bulkBusy ? 'Working…' : 'Apply'}</button>
+          <label className="sr-only" htmlFor="bulk-acct">Move to account</label>
+          <select id="bulk-acct" value={bulkAccountChoice} onChange={e => setBulkAccountChoice(e.target.value)}>
+            <option value="">Move to…</option>
+            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <button type="button" className="btn btn-sm btn-on-ink" disabled={!bulkAccountChoice || bulkBusy} onClick={handleBulkAccount}>{bulkBusy ? 'Working…' : 'Move'}</button>
+          <button type="button" className="btn btn-sm btn-ghost-ink" onClick={() => setSelectedIds(new Set())}>Clear</button>
+        </div>
+      )}
     </div>
   );
 }

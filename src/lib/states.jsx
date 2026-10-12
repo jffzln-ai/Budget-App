@@ -1,16 +1,21 @@
 import React from 'react';
 
+// Skeleton blocks shaped roughly like a page: a heading, a hero, two cards.
+// Shown on first load only - refreshes keep the current content on screen.
 export function LoadingState({ label = 'Loading…' }) {
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 20, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13, boxShadow: 'var(--card-shadow)' }}>
-      {label}
+    <div className="skeleton" aria-busy="true">
+      <span className="sr-only">{label}</span>
+      <div className="skel" style={{ height: 180, borderRadius: 16 }} />
+      <div className="skel" style={{ height: 220, borderRadius: 16 }} />
+      <div className="skel" style={{ height: 160, borderRadius: 16 }} />
     </div>
   );
 }
 
 export function ErrorState({ message }) {
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 20, padding: '20px 22px', color: 'var(--rust)', fontSize: 13, boxShadow: 'var(--card-shadow)' }}>
+    <div className="card" role="alert" style={{ color: 'var(--neg)' }}>
       {message}
     </div>
   );
@@ -18,7 +23,7 @@ export function ErrorState({ message }) {
 
 export function EmptyState({ label }) {
   return (
-    <div style={{ padding: '24px 4px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 }}>
+    <div className="t-14 muted" style={{ padding: '24px 4px', textAlign: 'center' }}>
       {label}
     </div>
   );
