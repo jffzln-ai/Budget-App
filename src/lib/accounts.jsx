@@ -33,7 +33,7 @@ export function fmtCAD(n) {
 // A dollar figure that counts to its new value when it changes.
 export function Money({ value, className, style }) {
   const shown = useCountUp(value);
-  return <span className={className} style={style}>{fmtCAD(shown)}</span>;
+  return <span className={className ? `num ${className}` : 'num'} style={style}>{fmtCAD(shown)}</span>;
 }
 
 // Debt shows as an amount owed in ink, not red: carrying a card balance is

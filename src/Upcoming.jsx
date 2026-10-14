@@ -7,7 +7,7 @@ import { LoadingState, ErrorState, EmptyState } from './lib/states.jsx';
 import { projectOccurrences, isIncome, todayIso } from './lib/occurrences.js';
 import { useToast } from './lib/toast.jsx';
 import { useCountUp } from './lib/useCountUp.js';
-import { IconMoreVertical, IconChevronRight } from './lib/icons.jsx';
+import { IconMoreVertical, IconChevronRight, IconPlus } from './lib/icons.jsx';
 
 // Confirmed is the normal state, so it gets no chip; the others are filled chips on the semantic palette.
 const STATUS_CHIP = {
@@ -74,6 +74,7 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
   const [editingPlannedId, setEditingPlannedId] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [plannedOpen, setPlannedOpen] = useState(false);
 
   useEffect(() => {
     function closeMenu(e) {
@@ -222,6 +223,8 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
         account_id: plannedForm.account_id, description: plannedForm.description.trim(), date: plannedForm.date, amount: amt,
       });
       setPlannedForm(f => ({ ...f, description: '', date: '', amount: '' }));
+      setPlannedOpen(false);
+      toast(`Added ${plannedForm.description.trim()} to Upcoming`);
       await load();
     } catch (err) {
       fail("Couldn't save that change", err);
@@ -323,7 +326,7 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
             </form>
           ) : (<>
             {chip && <span className={`chip ${chip.cls}`}>{chip.label}</span>}
-            <span className={`t-14 semi${income && !isSkipped ? ' pos' : ''}`} style={{ whiteSpace: 'nowrap' }}>{income ? '+' : ''}{fmtCAD(o.rule.expected_amount)}</span>
+            <span className={`num t-14${income && !isSkipped ? ' pos' : ''}`} style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{income ? '+' : ''}{fmtCAD(o.rule.expected_amount)}</span>
             {!o.rule.planned && o.rule.status === 'needs_confirmation' && (
               <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => handleConfirm(o.rule)}>{busy ? 'Saving…' : 'Confirm'}</button>
             )}
@@ -359,6 +362,13 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
 
   const selectedOccs = selectedDate ? (occByDate[selectedDate] || []) : [];
 
+  // Rest of this month, for whichever accounts are showing.
+  const thisYm = today.slice(0, 7);
+  const restOfMonth = displayedOccurrences.filter(o => o.date.startsWith(thisYm) && countsTowardTotal(o));
+  const billsLeft = restOfMonth.filter(o => !isIncome(o.rule));
+  const incomeLeft = restOfMonth.filter(o => isIncome(o.rule));
+  const sumOf = list => list.reduce((sum, o) => sum + o.rule.expected_amount, 0);
+
   return (
     <div className="stack">
       <div className="toolbar" style={{ justifyContent: 'space-between' }}>
@@ -367,19 +377,63 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
           <option value="all">All accounts</option>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <div className="segmented" role="group" aria-label="View" style={{ minWidth: 180 }}>
-          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
-          <button type="button" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>Calendar</button>
+        <div className="toolbar">
+          <div className="segmented hide-wide" role="group" aria-label="View" style={{ minWidth: 180 }}>
+            <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
+            <button type="button" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>Calendar</button>
+          </div>
+          <button type="button" className="btn btn-primary" aria-expanded={plannedOpen} aria-controls="plan-form" onClick={() => setPlannedOpen(v => !v)}>
+            {plannedOpen ? 'Close' : <><IconPlus />Planned expense</>}
+          </button>
         </div>
       </div>
 
-      {nextPayrollDate && (
-        <section className="hero" aria-labelledby="due-label">
-          <span className="t-12 caps hero-soft" id="due-label">Due before payday</span>
-          <span className="hero-value t-44 display">{fmtCAD(shownDue)}</span>
-          <span className="t-14 hero-soft">{billsBeforePayday} bill{billsBeforePayday === 1 ? '' : 's'} on Infinity · payday {fmtShortDay(nextPayrollDate)}</span>
+      {plannedOpen && (
+        <section className="card" id="plan-form" aria-labelledby="plan-h">
+          <h2 className="t-16 semi" id="plan-h" style={{ margin: 0 }}>Add a one-off planned expense</h2>
+          <form className="form-row" onSubmit={e => { e.preventDefault(); handleAddPlanned(); }}>
+            <label className="field" style={{ flexBasis: 200 }}><span>Description</span>
+              <input className="input" value={plannedForm.description} onChange={e => setPlannedForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. New tires" autoFocus />
+            </label>
+            <label className="field"><span>Account</span>
+              <select className="input" value={plannedForm.account_id} onChange={e => setPlannedForm(f => ({ ...f, account_id: e.target.value }))}>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Date</span>
+              <input className="input" type="date" value={plannedForm.date} onChange={e => setPlannedForm(f => ({ ...f, date: e.target.value }))} />
+            </label>
+            <label className="field"><span>Amount</span>
+              <input className="input" type="number" inputMode="decimal" value={plannedForm.amount} onChange={e => setPlannedForm(f => ({ ...f, amount: e.target.value }))} placeholder="−$ or +$" />
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={savingPlanned}>{savingPlanned ? 'Saving…' : 'Add'}</button>
+          </form>
+          <div className="t-12 muted">Use a negative amount for an expense, positive for expected income.</div>
         </section>
       )}
+
+      <div className="stats is-4">
+        <div className="stat">
+          <span className="t-12 caps muted">Due before payday</span>
+          <span className="stat-value">{nextPayrollDate ? fmtCAD(shownDue) : '—'}</span>
+          <span className="t-12 muted">{nextPayrollDate ? `${billsBeforePayday} bill${billsBeforePayday === 1 ? '' : 's'} on Infinity by ${fmtShortDay(nextPayrollDate)}` : 'No payday found on Infinity'}</span>
+        </div>
+        <div className="stat">
+          <span className="t-12 caps muted">Bills left this month</span>
+          <span className="stat-value">{fmtCAD(sumOf(billsLeft))}</span>
+          <span className="t-12 muted">{billsLeft.length} bill{billsLeft.length === 1 ? '' : 's'}</span>
+        </div>
+        <div className="stat">
+          <span className="t-12 caps muted">Income to come</span>
+          <span className="stat-value pos">+{fmtCAD(sumOf(incomeLeft))}</span>
+          <span className="t-12 muted">{incomeLeft.length ? `${incomeLeft.length} deposit${incomeLeft.length === 1 ? '' : 's'} this month` : 'None left this month'}</span>
+        </div>
+        <div className="stat">
+          <span className="t-12 caps muted">Needs you</span>
+          <span className="stat-value" style={needsYouCount ? { color: 'var(--status-warn-text)' } : undefined}>{needsYouCount}</span>
+          <span className="t-12 muted">{needsYouCount ? 'Bills to confirm' : 'All confirmed'}</span>
+        </div>
+      </div>
 
       {needsYouCount > 0 && (
         <section className="card attention" aria-labelledby="needs-h">
@@ -413,8 +467,9 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
         </section>
       )}
 
-      {view === 'list' ? (
-        monthGroups.length === 0 ? (
+      <div className="split-layout up-layout">
+      <div className={`split-main stack${view === 'calendar' ? ' hide-narrow' : ''}`}>
+      {monthGroups.length === 0 ? (
           <div className="card"><EmptyState label="Nothing scheduled ahead." /></div>
         ) : monthGroups.map(([ym, occs]) => {
           const income = occs.filter(o => isIncome(o.rule) && countsTowardTotal(o)).reduce((sum, o) => sum + o.rule.expected_amount, 0);
@@ -433,8 +488,10 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
               <div>{occs.map(renderOccurrence)}</div>
             </section>
           );
-        })
-      ) : (
+        })}
+      </div>
+
+      <aside className={`split-aside${view === 'list' ? ' hide-narrow' : ''}`} aria-label="Calendar">
         <section className="card" aria-labelledby="cal-h">
           <div className="cal-nav">
             <button type="button" className="btn-icon" aria-label="Previous month" onClick={() => { setCalendarMonth(m => shiftMonth(m, -1)); setSelectedDate(null); }}>
@@ -480,29 +537,8 @@ export default function Upcoming({ householdId, refreshKey = 0 }) {
             <div className="t-12 muted">Tap a day to see what's due.</div>
           )}
         </section>
-      )}
-
-      <section className="card" aria-labelledby="plan-h">
-        <h2 className="t-16 semi" id="plan-h" style={{ margin: 0 }}>Add a one-off planned expense</h2>
-        <form className="form-row" onSubmit={e => { e.preventDefault(); handleAddPlanned(); }}>
-          <label className="field" style={{ flexBasis: 200 }}><span>Description</span>
-            <input className="input" value={plannedForm.description} onChange={e => setPlannedForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. New tires" />
-          </label>
-          <label className="field"><span>Account</span>
-            <select className="input" value={plannedForm.account_id} onChange={e => setPlannedForm(f => ({ ...f, account_id: e.target.value }))}>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>
-          <label className="field"><span>Date</span>
-            <input className="input" type="date" value={plannedForm.date} onChange={e => setPlannedForm(f => ({ ...f, date: e.target.value }))} />
-          </label>
-          <label className="field"><span>Amount</span>
-            <input className="input" type="number" inputMode="decimal" value={plannedForm.amount} onChange={e => setPlannedForm(f => ({ ...f, amount: e.target.value }))} placeholder="−$ or +$" />
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={savingPlanned}>{savingPlanned ? 'Saving…' : 'Add'}</button>
-        </form>
-        <div className="t-12 muted">Use a negative amount for an expense, positive for expected income.</div>
-      </section>
+      </aside>
+      </div>
     </div>
   );
 }

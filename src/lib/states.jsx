@@ -6,9 +6,9 @@ export function LoadingState({ label = 'Loading…' }) {
   return (
     <div className="skeleton" aria-busy="true">
       <span className="sr-only">{label}</span>
-      <div className="skel" style={{ height: 180, borderRadius: 16 }} />
-      <div className="skel" style={{ height: 220, borderRadius: 16 }} />
-      <div className="skel" style={{ height: 160, borderRadius: 16 }} />
+      <div className="skel" style={{ height: 180, borderRadius: 6 }} />
+      <div className="skel" style={{ height: 220, borderRadius: 6 }} />
+      <div className="skel" style={{ height: 160, borderRadius: 6 }} />
     </div>
   );
 }
