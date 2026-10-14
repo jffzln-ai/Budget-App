@@ -12,10 +12,10 @@ function fmtDate(iso) {
 }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 16, padding: 22, boxShadow: 'var(--e1)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  num: { fontFamily: 'var(--font)', fontVariantNumeric: 'tabular-nums' },
-  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  card: { background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 6, padding: 20, boxShadow: 'var(--e1)' },
+  label: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 8 },
+  num: { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' },
+  btn: { background: 'var(--brand-primary)', color: 'var(--on-brand)', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 };
 const GOLD = 'var(--gold)';
 

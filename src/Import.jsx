@@ -16,11 +16,11 @@ function normalizeKey(desc) { return desc.trim().toUpperCase().replace(/\s+/g, '
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 16, padding: 22, maxWidth: 560, boxShadow: 'var(--e1)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
-  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
+  card: { background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 6, padding: 20, maxWidth: 560, boxShadow: 'var(--e1)' },
+  label: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 8 },
+  field: { padding: '7px 10px', border: '1px solid var(--line-strong)', borderRadius: 4, fontSize: 13, background: 'var(--card)' },
+  btn: { background: 'var(--brand-primary)', color: 'var(--on-brand)', border: 'none', borderRadius: 4, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid var(--line-strong)', borderRadius: 4, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
 };
 
 export default function Import({ householdId }) {
@@ -191,8 +191,8 @@ export default function Import({ householdId }) {
             if (f) handleFile(f);
           }}
           style={{
-            border: `2px dashed ${dragOver ? 'var(--pine)' : 'var(--line)'}`, borderRadius: 14, padding: '24px 16px',
-            textAlign: 'center', cursor: 'pointer', background: dragOver ? 'var(--pine-soft)' : 'var(--card)', transition: 'all 0.15s',
+            border: `2px dashed ${dragOver ? 'var(--brand-accent)' : 'var(--line-strong)'}`, borderRadius: 6, padding: '24px 16px',
+            textAlign: 'center', cursor: 'pointer', background: dragOver ? 'var(--brand-soft)' : 'var(--card)', transition: 'all 0.15s',
           }}
         >
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Drop a CSV here, or click to browse</div>
@@ -204,7 +204,7 @@ export default function Import({ householdId }) {
       {msg && <div style={{ color: msg.tone, fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{msg.text}</div>}
 
       {pending && (
-        <div style={{ border: '1px solid var(--line)', borderRadius: 14, padding: 16, background: 'var(--cream-tint)' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: 6, padding: 16, background: 'var(--cream-tint)' }}>
           {pending.guessNote && (
             <div style={{ color: 'var(--pine)', fontSize: 13, marginBottom: 10 }}>{pending.guessNote}</div>
           )}

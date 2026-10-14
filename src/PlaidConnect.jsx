@@ -10,11 +10,11 @@ function fmtDateTime(iso) {
 }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 16, padding: 22, maxWidth: 560, marginTop: 20, boxShadow: 'var(--e1)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
-  btn: { background: 'var(--pine)', color: 'var(--hero-text)', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
+  card: { background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 6, padding: 20, maxWidth: 560, marginTop: 20, boxShadow: 'var(--e1)' },
+  label: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 8 },
+  field: { padding: '7px 10px', border: '1px solid var(--line-strong)', borderRadius: 4, fontSize: 13, background: 'var(--card)' },
+  btn: { background: 'var(--brand-primary)', color: 'var(--on-brand)', border: 'none', borderRadius: 4, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'none', border: '1px solid var(--line-strong)', borderRadius: 4, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--ink)' },
 };
 
 // OAuth institutions (most major banks) take the user completely off this
@@ -185,7 +185,7 @@ export default function PlaidConnect({ householdId }) {
       {linkToken && <LinkLauncher linkToken={linkToken} isOAuthResume={isOAuthResume} onExchanged={handleExchanged} onError={setError} />}
 
       {pendingMapping && (
-        <div style={{ marginTop: 16, padding: 14, background: 'var(--cream-tint)', border: '1px solid var(--line)', borderRadius: 14 }}>
+        <div style={{ marginTop: 16, padding: 14, background: 'var(--cream-tint)', border: '1px solid var(--line)', borderRadius: 6 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
             {pendingMapping.institution_name} found {pendingMapping.accounts.length} account{pendingMapping.accounts.length === 1 ? '' : 's'} - match each to an existing account (keeps its history) or create a new one:
           </div>

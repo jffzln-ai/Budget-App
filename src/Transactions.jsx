@@ -500,7 +500,7 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
                 ) : (
                   <button
                     type="button"
-                    className={`chip ${t.amount > 0 ? 'is-pos' : 'is-muted'}`}
+                    className={`chip ${t.category === 'Uncategorized' ? 'is-warn' : t.amount > 0 ? 'is-pos' : 'is-muted'}`}
                     onClick={() => setEditingCategoryId(t.id)}
                     aria-label={`Category: ${t.category}. Change category`}
                   >{t.category}</button>

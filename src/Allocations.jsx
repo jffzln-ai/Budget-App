@@ -3,15 +3,15 @@ import { getAccounts, getAllTransactions, computeLiveBalances } from './lib/quer
 import { LoadingState, ErrorState } from './lib/states.jsx';
 
 function fmtCAD(n) {
-  if (n === null || n === undefined) return 'â€”';
+  if (n === null || n === undefined) return '—';
   return '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const s = {
-  card: { background: 'var(--card)', borderRadius: 16, padding: 22, boxShadow: 'var(--e1)' },
-  label: { fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 },
-  num: { fontFamily: 'var(--font)', fontVariantNumeric: 'tabular-nums' },
-  field: { padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--card)' },
+  card: { background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 6, padding: 20, boxShadow: 'var(--e1)' },
+  label: { fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 8 },
+  num: { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' },
+  field: { padding: '7px 10px', border: '1px solid var(--line-strong)', borderRadius: 4, fontSize: 13, background: 'var(--card)' },
 };
 
 function ymKey(date) { return date.slice(0, 7); }
@@ -68,9 +68,9 @@ export default function Allocations({ householdId, refreshKey = 0 }) {
           const outflow = Math.abs(accTxns.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
           return (
             <div key={a.id} style={s.card}>
-              <div style={s.label}>{a.name}{a.purpose === 'rental' ? ' Â· Rental' : ''}</div>
+              <div style={s.label}>{a.name}{a.purpose === 'rental' ? ' · Rental' : ''}</div>
               <div style={{ ...s.num, fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>{fmtCAD(balance)}</div>
-              {month !== 'all' && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>current balance Â· activity below is {monthLabel(month)} only</div>}
+              {month !== 'all' && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>current balance · activity below is {monthLabel(month)} only</div>}
               <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 12, color: 'var(--ink-soft)' }}>
                 <span>In: <span style={{ ...s.num, color: 'var(--pine)' }}>{fmtCAD(inflow)}</span></span>
                 <span>Out: <span style={{ ...s.num, color: 'var(--rust)' }}>{fmtCAD(outflow)}</span></span>
@@ -79,7 +79,7 @@ export default function Allocations({ householdId, refreshKey = 0 }) {
                 {accTxns.slice(0, month === 'all' ? 4 : 12).map(t => (
                   <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--line-soft)' }}>
                     <span style={{ color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{t.raw_description}</span>
-                    <span style={{ ...s.num, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{t.amount < 0 ? 'âˆ’' : '+'}{fmtCAD(t.amount)}</span>
+                    <span style={{ ...s.num, fontWeight: 600, color: t.amount < 0 ? 'var(--ink)' : 'var(--pine)' }}>{t.amount < 0 ? '−' : '+'}{fmtCAD(t.amount)}</span>
                   </div>
                 ))}
               </div>

@@ -7,6 +7,10 @@ import { useCountUp } from './lib/useCountUp.js';
 import { IconChevronRight, IconChevronDown, IconPencil } from './lib/icons.jsx';
 import { AccountRow, Money, fmtCAD } from './lib/accounts.jsx';
 
+// Overview lists only everyday money. Investments, loans and lines of credit
+// live on the Net worth page, so large balances aren't on the first screen.
+const EVERYDAY_TYPES = ['chequing', 'savings', 'credit_card'];
+
 function monthLabel(ym) {
   const [y, m] = ym.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-CA', { month: 'long' });
@@ -226,7 +230,6 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
   }, [transactions, tags, thisMonthYm]);
   const maxCategorySpend = categorySpend.length ? categorySpend[0][1] : 1;
   const monthSpendTotal = categorySpend.reduce((s, [, amt]) => s + amt, 0);
-  const netWorth = accounts ? accounts.reduce((s, a) => s + (balances[a.id] || 0), 0) : 0;
 
   // After a refresh, briefly highlight the categories whose totals moved.
   useEffect(() => {
@@ -305,8 +308,9 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
         <div className="t-14 hero-soft">{heroSub}</div>
         <div className="meter" aria-hidden="true"><i style={{ width: `${meterPct}%` }} /></div>
         <div className="hero-legend t-12 hero-soft">
+          <span>Cash available <b><Money value={cashOnHand} /></b></span>
           <span>Bills <b><Money value={committedThroughHorizon} /></b></span>
-          <span>{horizon === 'payday' ? 'Cash' : 'Cash + income'} <b><Money value={heroMax} /></b></span>
+          {horizon !== 'payday' && <span>Income <b><Money value={incomeThroughHorizon} /></b></span>}
         </div>
         {heroValue < 0 && <span className="chip is-neg" style={{ alignSelf: 'flex-start' }}>Bills exceed cash by {fmtCAD(-heroValue)}</span>}
       </section>
@@ -315,10 +319,9 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
         <section className="card is-compact is-grouped" aria-labelledby="accounts-h">
           <div className="card-head">
             <h2 className="t-14 semi" id="accounts-h">Accounts</h2>
-            <span className="t-12 muted">Net <Money value={netWorth} className="semi" style={{ color: 'var(--ink)' }} /></span>
           </div>
           <ul className="rows is-compact">
-            {accounts.map(a => <AccountRow key={a.id} account={a} balance={balances[a.id]} onSelect={onSelectAccount} />)}
+            {accounts.filter(a => EVERYDAY_TYPES.includes(a.type)).map(a => <AccountRow key={a.id} account={a} balance={balances[a.id]} onSelect={onSelectAccount} />)}
           </ul>
         </section>
 

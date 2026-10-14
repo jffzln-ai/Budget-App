@@ -68,17 +68,18 @@ function AuthScreen() {
   );
 }
 
-// Four destinations in the tab bar plus More; the sidebar shows everything.
+// Three destinations in the tab bar plus More; the sidebar shows both groups.
+// Net worth sits in More on purpose so it isn't on screen when someone glances over.
 const TAB_BAR = [
   { key: 'overview', label: 'Overview', Icon: IconHome },
   { key: 'transactions', label: 'Transactions', Icon: IconList },
   { key: 'upcoming', label: 'Upcoming', Icon: IconClock },
-  { key: 'networth', label: 'Net worth', Icon: IconTrendingUp },
 ];
 const MORE_TABS = [
   { key: 'reimbursements', label: 'Reimbursements', Icon: IconReceipt },
   { key: 'allocations', label: 'Allocations', Icon: IconLayers },
   { key: 'import', label: 'Import', Icon: IconUpload },
+  { key: 'networth', label: 'Net worth', Icon: IconTrendingUp },
 ];
 const ALL_TABS = [...TAB_BAR, ...MORE_TABS];
 
@@ -163,15 +164,6 @@ function DashboardScreen({ session, theme, onThemeChange }) {
     return () => { cancelled = true; };
   }, [session.user.id]);
 
-  // iOS: the large page title collapses into the frosted top bar once scrolled.
-  useEffect(() => {
-    const root = document.documentElement;
-    const onScroll = () => root.classList.toggle('is-scrolled', window.scrollY > 44);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => { window.removeEventListener('scroll', onScroll); root.classList.remove('is-scrolled'); };
-  }, []);
-
   // More sheet: focus moves in on open, Escape closes, Tab stays inside, focus returns to More.
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
@@ -216,34 +208,40 @@ function DashboardScreen({ session, theme, onThemeChange }) {
   return (
     <div className="shell">
       <aside className="sidebar" aria-label="Main">
-        <div className="sidebar-brand">Ledger</div>
+        <div className="sidebar-brand"><b>Ledger</b><span>Family finances</span></div>
         <nav>
-          {ALL_TABS.map(({ key, label, Icon }) => (
+          {TAB_BAR.map(({ key, label, Icon }) => (
+            <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => go(key)}>
+              <Icon />{label}
+            </button>
+          ))}
+          <div className="sidebar-group" id="side-more">More</div>
+          {MORE_TABS.map(({ key, label, Icon }) => (
             <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => go(key)}>
               <Icon />{label}
             </button>
           ))}
         </nav>
         <div className="sidebar-foot">
-          <div className="sheet-section" style={{ padding: 0 }} id="side-appearance">Appearance</div>
+          <div className="sidebar-group" id="side-appearance">Appearance</div>
           <ThemeSwitch theme={theme} onChange={onThemeChange} idPrefix="side" />
           <div className="t-12 muted" style={{ marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.user.email}</div>
-          <button type="button" className="btn btn-quiet btn-sm is-neg" style={{ justifyContent: 'flex-start', padding: 0 }} onClick={() => supabase.auth.signOut()}>Sign out</button>
+          <button type="button" className="btn btn-quiet btn-sm" style={{ justifyContent: 'flex-start', padding: 0 }} onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </aside>
 
       <div style={{ minWidth: 0 }}>
         <header className="topbar">
-          <span className="topbar-brand">Ledger</span>
-          <span className="topbar-compact" aria-hidden="true">{activeLabel}</span>
-          {syncButton}
+          <div className="topbar-inner">
+            <div className="page-head">
+              {tab === 'overview' && <span className="eyebrow">{todayLabel()}</span>}
+              <h1>{activeLabel}</h1>
+            </div>
+            {syncButton}
+          </div>
         </header>
 
         <main className="main">
-          <div className="page-head">
-            <h1 className="t-28 display">{activeLabel}</h1>
-            {tab === 'overview' && <span className="t-14 muted">{todayLabel()}</span>}
-          </div>
           {loadErr && <ErrorState message={`Couldn't load your household: ${loadErr}`} />}
           {!loadErr && !household && <LoadingState />}
           {household && tab === 'overview' && <Overview householdId={hid} refreshKey={refreshKey} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
