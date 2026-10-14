@@ -33,6 +33,14 @@ function monthLabel(ym) {
 function pad2(n) { return String(n).padStart(2, '0'); }
 function iso(y, m, d) { return `${y}-${pad2(m)}-${pad2(d)}`; }
 
+// One-tap periods above the list; the Filters panel has the full set.
+const QUICK_PERIODS = [
+  { key: 'this_month', label: 'This month' },
+  { key: 'last_month', label: 'Last month' },
+  { key: 'last_3_months', label: '3 months' },
+  { key: 'all', label: 'All time' },
+];
+
 // Named ranges relative to today; specific months and 'custom' are handled separately.
 function periodRange(period, today) {
   const [ty, tm] = today.split('-').map(Number);
@@ -415,6 +423,11 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
     }
   }
 
+  // Everything (not just the filtered view) that still needs a decision.
+  const uncategorizedCount = (transactions || []).filter(t => !t.is_transfer && t.category === 'Uncategorized').length;
+  const needsYouTotal = uncategorizedCount + unmatchedTransfers.length;
+  const needsYouLabel = `${needsYouTotal} transaction${needsYouTotal === 1 ? '' : 's'} need${needsYouTotal === 1 ? 's' : ''} you`;
+
   const activeFilterCount = [accountFilter !== 'all', categoryFilter !== 'all', period !== 'all', showTransfers, unmatchedOnly].filter(Boolean).length;
 
   if (error && !transactions) return <ErrorState message={`Couldn't load transactions: ${error}`} />;
@@ -561,6 +574,12 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
         </button>
       </div>
 
+      <div className="segmented period-seg" role="group" aria-label="Period">
+        {QUICK_PERIODS.map(p => (
+          <button key={p.key} type="button" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>{p.label}</button>
+        ))}
+      </div>
+
       {filtersOpen && (
         <section className="card" id="txn-filters" aria-label="Filters">
           <div className="filter-panel">
@@ -616,16 +635,37 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
       <div className="toolbar" style={{ gap: 4, flexWrap: 'nowrap' }}>
         <label className="check" style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} disabled={!filtered.length} />Select all</label>
         <span style={{ flex: 1 }} />
-        <button type="button" className="btn btn-quiet btn-sm" aria-expanded={breakdownOpen} onClick={() => setBreakdownOpen(v => !v)}>{breakdownOpen ? 'Hide breakdown' : 'Breakdown'}</button>
+        <button type="button" className="btn btn-quiet btn-sm hide-wide" aria-expanded={breakdownOpen} onClick={() => setBreakdownOpen(v => !v)}>{breakdownOpen ? 'Hide breakdown' : 'Breakdown'}</button>
         <button type="button" className="btn btn-quiet btn-sm" aria-expanded={showManageCategories} onClick={() => setShowManageCategories(v => !v)}>Categories</button>
         <button type="button" className="btn btn-quiet btn-sm" onClick={exportCsv} title="Download the filtered list as CSV">Export</button>
       </div>
 
-      {breakdownOpen && (
-        <section className="card" aria-labelledby="bd-h">
+      <div className="split-layout">
+      <aside className={`split-aside txn-aside${breakdownOpen ? ' is-open' : ''}`} aria-label="Summary">
+        {(uncategorizedCount > 0 || unmatchedTransfers.length > 0) && (
+          <div className="callout" style={{ '--c': 'var(--status-warn)' }}>
+            <b className="t-14 semi">{needsYouLabel}</b>
+            <span className="t-12 muted">
+              {[uncategorizedCount > 0 && `${uncategorizedCount} without a category`, unmatchedTransfers.length > 0 && `${unmatchedTransfers.length} transfer${unmatchedTransfers.length === 1 ? '' : 's'} with no match`].filter(Boolean).join(' · ')}
+            </span>
+            <div className="toolbar" style={{ marginTop: 4 }}>
+              {uncategorizedCount > 0 && (
+                <button type="button" className="btn btn-secondary btn-sm" aria-pressed={categoryFilter === 'Uncategorized'} onClick={() => { setUnmatchedOnly(false); setCategoryFilter(categoryFilter === 'Uncategorized' ? 'all' : 'Uncategorized'); }}>
+                  {categoryFilter === 'Uncategorized' ? 'Show all' : 'Show uncategorized'}
+                </button>
+              )}
+              {unmatchedTransfers.length > 0 && (
+                <button type="button" className="btn btn-quiet btn-sm" aria-pressed={unmatchedOnly} onClick={() => { setCategoryFilter('all'); setUnmatchedOnly(v => !v); }}>
+                  {unmatchedOnly ? 'Show all' : 'Show transfers'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        <section className="card breakdown" aria-labelledby="bd-h">
           <div className="card-head">
             <h2 className="t-16 semi" id="bd-h">Spending by category</h2>
-            <span className="t-14 semi">{fmtAbsCAD(categoryBreakdownTotal)}</span>
+            <span className="t-14 semi num">{fmtAbsCAD(categoryBreakdownTotal)}</span>
           </div>
           <div className="t-12 muted" style={{ marginTop: -8 }}>{periodLabel}{accountFilter !== 'all' ? ` · ${accountsById[accountFilter]?.name}` : ''}{q ? ` · "${q}"` : ''}</div>
           {categoryBreakdown.length === 0 ? <EmptyState label="No expenses in this range." /> : (
@@ -650,8 +690,9 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
             </ul>
           )}
         </section>
-      )}
+      </aside>
 
+      <div className="split-main stack">
       {showManageCategories && (
         <section className="card" aria-labelledby="mc-h">
           <h2 className="t-16 semi" id="mc-h" style={{ margin: 0 }}>Custom categories</h2>
@@ -675,7 +716,7 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
       )}
 
       {pendingBulkApply && (
-        <section className="card" role="status" style={{ background: 'var(--brand-soft)', boxShadow: 'none' }}>
+        <section className="card is-info" role="status">
           <div className="t-14">
             Also apply <strong>{pendingBulkApply.category}</strong> to <strong>{pendingBulkApply.count}</strong> other "{pendingBulkApply.pattern}" transaction{pendingBulkApply.count === 1 ? '' : 's'}?
           </div>
@@ -695,6 +736,8 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
           <div className="list-card">{g.rows.map(renderTxn)}</div>
         </div>
       ))}
+      </div>
+      </div>
 
       {selectedIds.size > 0 && (
         <div className="bulkbar" role="region" aria-label="Bulk actions">

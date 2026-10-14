@@ -431,6 +431,41 @@ input[type="checkbox"] { accent-color: var(--brand-accent); width: 16px; height:
 .stat-value { font-size: 16px; line-height: 24px; font-weight: 500; }
 @media (max-width: 420px) { .stat { padding: 10px 12px; } .stat-value { font-size: 14px; line-height: 20px; } }
 
+.stats.is-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 699px) { .stats.is-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat .t-12.muted { white-space: normal; }
+
+/* Callout: a 2px status bar on a faint tint. Set --c to a --status-* token. */
+.callout {
+  display: flex; flex-direction: column; gap: 3px; padding: 12px 14px;
+  border: 1px solid var(--line); border-left: 2px solid var(--c, var(--status-warn)); border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c, var(--status-warn)) 8%, var(--surface));
+}
+.card.is-info { border-left: 2px solid var(--brand-accent); background: color-mix(in srgb, var(--brand-accent) 6%, var(--surface)); box-shadow: none; }
+
+/* Main column + side column. Below 1280px the side column stacks above the
+   main one, and pages choose what shows there (.hide-narrow / .hide-wide). */
+.split-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.split-main, .split-aside { min-width: 0; }
+.split-aside { display: flex; flex-direction: column; gap: 16px; order: -1; }
+.txn-aside .breakdown { display: none; }
+.txn-aside.is-open .breakdown { display: flex; }
+.period-seg { align-self: flex-start; max-width: 100%; overflow-x: auto; }
+.period-seg button { flex: none; white-space: nowrap; }
+@media (max-width: 1279px) { .hide-narrow { display: none !important; } }
+@media (min-width: 1280px) {
+  .hide-wide { display: none !important; }
+  .split-layout { grid-template-columns: minmax(0, 1fr) 320px; }
+  .split-main { grid-column: 1; grid-row: 1; }
+  .split-aside { grid-column: 2; grid-row: 1; }
+  .up-layout .split-aside { position: sticky; top: 88px; }
+  .txn-aside .breakdown { display: flex; }
+  /* Transactions read as table rows: description, then category and account in a fixed column. */
+  .list-card .txn-main { flex-direction: row; align-items: center; gap: 12px; }
+  .list-card .txn-desc { flex: 1; min-width: 0; }
+  .list-card .txn-meta { flex: none; width: 280px; }
+}
+
 /* Transactions, grouped by day */
 .day-group { display: flex; flex-direction: column; gap: 6px; }
 .day-label { padding: 0 4px; color: var(--ink-muted); }
@@ -484,6 +519,7 @@ input[type="checkbox"] { accent-color: var(--brand-accent); width: 16px; height:
 .occ-main { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .occ-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .month-sum { display: flex; gap: 12px; flex-wrap: wrap; }
+.month-sum b { font-family: var(--font-mono); font-weight: 500; }
 .cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .cal-wd { text-align: center; font-size: 10.5px; line-height: 14px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); padding-bottom: 4px; }
