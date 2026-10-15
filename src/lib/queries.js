@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient.js';
+import { isDebtAccount } from './accounts.jsx';
 
 export async function getHousehold(userId) {
   const { data, error } = await supabase
@@ -298,8 +299,15 @@ export async function deleteAccount(accountId) {
   if (error) throw error;
 }
 
+// Returns signed balances where negative always means "you owe". Plaid (and so
+// current_balance) reports credit cards and lines of credit the other way
+// round: positive = owed, negative = a credit on the card. Debt accounts are
+// flipped here so every page can treat the sign the same way.
 export function computeLiveBalances(accounts) {
   const balances = {};
-  accounts.forEach(a => { balances[a.id] = a.current_balance; });
+  accounts.forEach(a => {
+    const b = a.current_balance;
+    balances[a.id] = isDebtAccount(a) && b != null ? -b : b;
+  });
   return balances;
 }

@@ -38,12 +38,14 @@ export function Money({ value, className, style }) {
 
 // Debt shows as an amount owed in ink, not red: carrying a card balance is
 // normal. Red is reserved for something wrong, like an overdrawn chequing account.
+// For debt, `value` uses the app-wide sign: negative = owed, positive = a credit.
 export function DebtAwareAmount({ value, isDebt, className = 't-14 semi' }) {
   const overdrawn = !isDebt && (value || 0) < 0;
+  const debtLabel = (value || 0) > 0 ? 'credit' : 'owed';
   return (
     <span className="row-end">
       <Money value={isDebt ? Math.abs(value || 0) : (value || 0)} className={`row-amount ${className}`} style={overdrawn ? { color: 'var(--neg)' } : undefined} />
-      {isDebt && <span className="row-sub t-12 muted">owed</span>}
+      {isDebt && <span className="row-sub t-12 muted">{debtLabel}</span>}
     </span>
   );
 }

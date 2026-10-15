@@ -217,7 +217,7 @@ export default function NetWorth({ householdId, refreshKey = 0 }) {
                     <span className="row-title t-14 semi">{item.name}</span>
                     <span className="row-sub t-12 muted">{item.category}</span>
                   </span>
-                  <DebtAwareAmount value={item.value} isDebt={item.type === 'liability'} />
+                  <DebtAwareAmount value={item.type === 'liability' ? -item.value : item.value} isDebt={item.type === 'liability'} />
                 </div>
                 <button type="button" className="btn-icon" aria-label={`Remove ${item.name}`} onClick={() => handleRemove(item)}><IconClose /></button>
               </li>
