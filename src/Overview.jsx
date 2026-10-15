@@ -217,14 +217,14 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
       .reduce((sum, o) => sum + o.rule.expected_amount, 0);
   }, [infinityFutureOcc, horizonEndDate]);
 
-  // Upcoming charges on each card, less that card's own credit (balances are
-  // negative = owed, so a positive balance is credit). Only the uncovered part
-  // will actually come out of Infinity.
+  // Per card (balances are negative = owed, so a positive balance is credit):
+  // credit left after the card's upcoming charges is spendable (surplus), and
+  // charges beyond the credit will come out of Infinity (uncovered).
   const cardTotals = useMemo(() => {
-    let charges = 0, covered = 0;
-    if (!accounts || !horizonEndDate) return { charges, covered, uncovered: 0 };
+    let charges = 0, covered = 0, surplus = 0;
+    if (!accounts) return { charges, covered, uncovered: 0, surplus };
     accounts.filter(isDebtAccount).forEach(card => {
-      const cardCharges = occurrences
+      const cardCharges = !horizonEndDate ? 0 : occurrences
         .filter(o =>
           o.rule.account_id === card.id &&
           o.date > today && o.date <= horizonEndDate &&
@@ -235,14 +235,16 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
       const credit = Math.max(balances[card.id] || 0, 0);
       charges += cardCharges;
       covered += Math.min(cardCharges, credit);
+      surplus += Math.max(credit - cardCharges, 0);
     });
-    return { charges, covered, uncovered: charges - covered };
+    return { charges, covered, uncovered: charges - covered, surplus };
   }, [accounts, occurrences, balances, today, horizonEndDate]);
 
   const cardCommitted = includeCards ? cardTotals.uncovered : 0;
+  const cardSurplus = includeCards ? cardTotals.surplus : 0;
   const committedTotal = committedThroughHorizon + cardCommitted;
-  const safeToSpend = cashOnHand - committedTotal;
-  const projectedFreeCash = cashOnHand + incomeThroughHorizon - committedTotal;
+  const safeToSpend = cashOnHand - committedTotal + cardSurplus;
+  const projectedFreeCash = cashOnHand + incomeThroughHorizon - committedTotal + cardSurplus;
 
   const thisMonthYm = today.slice(0, 7);
   const categorySpend = useMemo(() => {
@@ -308,7 +310,8 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
   }
 
   const heroValue = horizon === 'payday' ? safeToSpend : projectedFreeCash;
-  const heroMax = horizon === 'payday' ? cashOnHand : (cashOnHand + incomeThroughHorizon);
+  const heroCash = horizon === 'payday' ? cashOnHand : (cashOnHand + incomeThroughHorizon);
+  const heroMax = heroCash + cardSurplus;
   const shownHero = useCountUp(accounts ? heroValue : null);
 
   if (error && !accounts) return <ErrorState message={`Couldn't load overview: ${error}`} />;
@@ -318,10 +321,10 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
   const heroSub = horizon === 'payday'
     ? (nextPayrollDate ? `Payday ${paydayLabel(nextPayrollDate)} · in ${daysToPayday} day${daysToPayday === 1 ? '' : 's'}` : 'No upcoming payday found on Infinity')
     : `After ${fmtCAD(committedTotal)} in bills and ${fmtCAD(incomeThroughHorizon)} income`;
-  const cardNote = !includeCards || cardTotals.charges === 0 ? null
-    : cardTotals.covered > 0
-      ? `Card credit covers ${fmtCAD(cardTotals.covered)} of ${fmtCAD(cardTotals.charges)} in card charges`
-      : `Includes ${fmtCAD(cardTotals.charges)} in card charges`;
+  const cardNote = !includeCards ? null
+    : cardTotals.surplus > 0
+      ? `Card credit adds ${fmtCAD(cardTotals.surplus)} after ${fmtCAD(cardTotals.charges)} in card charges`
+      : cardTotals.charges > 0 ? `Includes ${fmtCAD(cardTotals.uncovered)} in card charges not covered by credit` : null;
 
   return (
     <>
@@ -342,11 +345,12 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
         <div className="meter" aria-hidden="true"><i style={{ width: `${meterPct}%` }} /></div>
         <div className="hero-legend t-12 hero-soft">
           <span>Bills <b><Money value={committedTotal} /></b></span>
-          <span>{horizon === 'payday' ? 'Cash' : 'Cash + income'} <b><Money value={heroMax} /></b></span>
+          <span>{horizon === 'payday' ? 'Cash' : 'Cash + income'} <b><Money value={heroCash} /></b></span>
+          {cardSurplus > 0 && <span>Card credit <b><Money value={cardSurplus} /></b></span>}
         </div>
         <label className="t-12 hero-soft" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
           <input type="checkbox" checked={includeCards} onChange={e => toggleIncludeCards(e.target.checked)} />
-          Count card charges, net of card credit
+          Include card credit and card charges
         </label>
         {cardNote && <div className="t-12 hero-soft">{cardNote}</div>}
         {heroValue < 0 && <span className="chip is-neg" style={{ alignSelf: 'flex-start' }}>Bills exceed cash by {fmtCAD(-heroValue)}</span>}
