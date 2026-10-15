@@ -262,6 +262,15 @@ export async function applyCategoryToMatching(householdId, pattern, category) {
   if (error) throw error;
 }
 
+// Like applyCategoryToMatching, but only touches rows that are still
+// Uncategorized, so the review queue never overwrites a category the user
+// already chose for another transaction with the same description.
+export async function applyCategoryToUncategorized(householdId, pattern, category) {
+  const { error } = await supabase.from('transactions').update({ category })
+    .eq('household_id', householdId).eq('raw_description', pattern).eq('category', 'Uncategorized').eq('is_transfer', false);
+  if (error) throw error;
+}
+
 export async function linkTransfer(txnId1, txnId2) {
   const gid = `manual_${txnId1}_${txnId2}`;
   const { error: e1 } = await supabase.from('transactions').update({ transfer_group_id: gid, needs_review: false }).eq('id', txnId1);

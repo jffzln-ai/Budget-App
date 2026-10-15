@@ -202,7 +202,8 @@ button { touch-action: manipulation; }
   .sidebar nav button:hover { background: var(--s2); color: var(--ink); }
   .sidebar nav button[aria-current="page"] { background: var(--brand-soft); color: var(--brand); }
   .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding: 0 var(--sp-3); }
-  .topbar { justify-content: flex-end; max-width: 960px; margin: 0 auto; padding: var(--sp-6) var(--sp-8) 0; background: none; }
+  /* Static, not sticky: with no background, a sticky bar let page content scroll underneath the Sync button. */
+  .topbar { position: static; justify-content: flex-end; max-width: 960px; margin: 0 auto; padding: var(--sp-6) var(--sp-8) 0; background: none; }
   .topbar .topbar-brand { display: none; }
   .main { padding: var(--sp-2) var(--sp-8) var(--sp-8); }
 }
@@ -388,6 +389,40 @@ html.ios .tabbar svg { width: 25px; height: 25px; }
 html.ios .sheet { border-radius: 12px 12px 0 0; background: var(--s0); }
 html.ios .sheet .row { background: var(--s1); border-radius: 0; padding: 12px var(--sp-4); }
 html.ios .sheet-section { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 400; padding: var(--sp-4) var(--sp-4) 6px; }
+
+/* ---------- Overview: safe-to-spend equation, review banner, account groups ---------- */
+.hero-eq { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sp-2); margin-top: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--hero-track); }
+.hero-eq span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hero-eq b { color: var(--hero-ink); font-weight: 600; font-size: 14px; line-height: 20px; }
+
+.review-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); background: var(--warn-soft); color: var(--ink); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
+.review-banner .btn { min-height: 44px; flex: none; }
+
+.acct-group + .acct-group { margin-top: var(--sp-2); }
+.acct-group-h { display: flex; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-1); }
+.acct-toggle {
+  width: 100%; min-height: 44px; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3);
+  border: 0; border-radius: var(--r-sm); background: var(--s2); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.acct-toggle > :first-child { flex: 1; }
+.acct-toggle .row-chev { display: inline-flex; transition: transform .15s; }
+
+/* Phones and tablets (not iOS, which has its own treatment): Sync is icon-only with a full-size touch target. */
+@media (max-width: 899px) {
+  html:not(.ios) .sync-btn { width: 44px; min-height: 44px; padding: 0; }
+  html:not(.ios) .sync-btn .sync-label { display: none; }
+}
+
+/* ---------- Review queue ---------- */
+.review-card { gap: var(--sp-2); padding: var(--sp-6) var(--sp-4); }
+.review-desc { overflow-wrap: anywhere; }
+.review-amt { font-size: 36px; line-height: 40px; }
+.review-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.review-pick, .review-skip { min-height: 44px; }
+.review-select { flex: 1 1 160px; min-width: 0; }
+.review-select .input { height: 44px; border-radius: var(--r-pill); }
+.review-remember { align-items: flex-start; min-height: 44px; margin-top: var(--sp-2); }
+.review-back { min-height: 44px; padding-left: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

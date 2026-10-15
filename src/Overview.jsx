@@ -116,7 +116,51 @@ function CategoryRow({ cat, amount, budget, maxSpend, editing, onEdit, onCancel,
   );
 }
 
-export default function Overview({ householdId, refreshKey = 0, onSelectAccount, onViewSpending }) {
+// Accounts grouped by kind. Savings and investments start collapsed so the
+// large investment balance doesn't crowd out the accounts you spend from.
+const ACCOUNT_GROUPS = [
+  { key: 'chequing', label: 'Chequing', types: ['chequing'] },
+  { key: 'cards', label: 'Cards', types: ['credit_card', 'line_of_credit'], debt: true },
+  { key: 'savings', label: 'Savings & investing', types: ['savings', 'investment'], collapsible: true },
+];
+
+function AccountGroups({ accounts, balances, onSelectAccount }) {
+  const [savingsOpen, setSavingsOpen] = useState(false);
+  const known = ACCOUNT_GROUPS.flatMap(g => g.types);
+  const groups = ACCOUNT_GROUPS.map(g => ({ ...g, accounts: accounts.filter(a => g.types.includes(a.type)) }));
+  const other = accounts.filter(a => !known.includes(a.type));
+  if (other.length) groups.push({ key: 'other', label: 'Other', accounts: other });
+
+  return groups.filter(g => g.accounts.length).map(g => {
+    const total = g.accounts.reduce((s, a) => s + (balances[a.id] || 0), 0);
+    const totalText = g.debt ? (total > 0 ? `${fmtCAD(total)} credit` : total < 0 ? `${fmtCAD(-total)} owed` : fmtCAD(0)) : fmtCAD(total);
+    const rows = (
+      <ul className="rows is-compact">
+        {g.accounts.map(a => <AccountRow key={a.id} account={a} balance={balances[a.id]} onSelect={onSelectAccount} />)}
+      </ul>
+    );
+    if (g.collapsible) {
+      return (
+        <div key={g.key} className="acct-group">
+          <button type="button" className="acct-toggle" aria-expanded={savingsOpen} onClick={() => setSavingsOpen(o => !o)}>
+            <span className="t-14 semi">{g.label}</span>
+            <span className="acct-toggle-end t-14 semi">{fmtCAD(total)}</span>
+            <span className="row-chev" style={{ transform: savingsOpen ? 'rotate(90deg)' : 'none' }}><IconChevronRight /></span>
+          </button>
+          {savingsOpen && rows}
+        </div>
+      );
+    }
+    return (
+      <div key={g.key} className="acct-group">
+        <div className="acct-group-h t-12 caps muted"><span>{g.label}</span><span>{totalText}</span></div>
+        {rows}
+      </div>
+    );
+  });
+}
+
+export default function Overview({ householdId, refreshKey = 0, onSelectAccount, onViewSpending, onReview }) {
   const toast = useToast();
   const [accounts, setAccounts] = useState(null);
   const [rules, setRules] = useState(null);
@@ -260,6 +304,12 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
   }, [transactions, tags, thisMonthYm]);
   const maxCategorySpend = categorySpend.length ? categorySpend[0][1] : 1;
   const monthSpendTotal = categorySpend.reduce((s, [, amt]) => s + amt, 0);
+  const uncategorizedCount = useMemo(
+    () => (transactions || []).filter(t => t.category === 'Uncategorized' && !t.is_transfer).length,
+    [transactions],
+  );
+  const uncategorizedThisMonth = (categorySpend.find(([cat]) => cat === 'Uncategorized') || [null, 0])[1];
+  const uncategorizedShare = monthSpendTotal > 0 ? Math.round((uncategorizedThisMonth / monthSpendTotal) * 100) : 0;
   const netWorth = accounts ? accounts.reduce((s, a) => s + (balances[a.id] || 0), 0) : 0;
 
   // After a refresh, briefly highlight the categories whose totals moved.
@@ -311,13 +361,11 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
 
   const heroValue = horizon === 'payday' ? safeToSpend : projectedFreeCash;
   const heroCash = horizon === 'payday' ? cashOnHand : (cashOnHand + incomeThroughHorizon);
-  const heroMax = heroCash + cardSurplus;
   const shownHero = useCountUp(accounts ? heroValue : null);
 
   if (error && !accounts) return <ErrorState message={`Couldn't load overview: ${error}`} />;
   if (!accounts || !rules || !transactions) return <LoadingState />;
 
-  const meterPct = heroMax > 0 ? Math.max(0, Math.min(heroValue / heroMax, 1)) * 100 : 0;
   const heroSub = horizon === 'payday'
     ? (nextPayrollDate ? `Payday ${paydayLabel(nextPayrollDate)} · in ${daysToPayday} day${daysToPayday === 1 ? '' : 's'}` : 'No upcoming payday found on Infinity')
     : `After ${fmtCAD(committedTotal)} in bills and ${fmtCAD(incomeThroughHorizon)} income`;
@@ -342,11 +390,10 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
         </div>
         <div className="hero-value t-44 display">{fmtCAD(shownHero)}</div>
         <div className="t-14 hero-soft">{heroSub}</div>
-        <div className="meter" aria-hidden="true"><i style={{ width: `${meterPct}%` }} /></div>
-        <div className="hero-legend t-12 hero-soft">
-          <span>Bills <b><Money value={committedTotal} /></b></span>
+        <div className="hero-eq t-12 hero-soft">
           <span>{horizon === 'payday' ? 'Cash' : 'Cash + income'} <b><Money value={heroCash} /></b></span>
-          {cardSurplus > 0 && <span>Card credit <b><Money value={cardSurplus} /></b></span>}
+          <span>− Bills <b><Money value={committedTotal} /></b></span>
+          {cardSurplus > 0 && <span>+ Card credit <b><Money value={cardSurplus} /></b></span>}
         </div>
         <label className="t-12 hero-soft" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
           <input type="checkbox" checked={includeCards} onChange={e => toggleIncludeCards(e.target.checked)} />
@@ -356,15 +403,27 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
         {heroValue < 0 && <span className="chip is-neg" style={{ alignSelf: 'flex-start' }}>Bills exceed cash by {fmtCAD(-heroValue)}</span>}
       </section>
 
+      {onReview && uncategorizedCount > 0 && (
+        <section className="review-banner" aria-label="Transactions needing a category">
+          <div>
+            <div className="t-14 semi">{uncategorizedCount} uncategorized transaction{uncategorizedCount === 1 ? '' : 's'}</div>
+            <div className="t-12">
+              {uncategorizedThisMonth > 0
+                ? `${fmtCAD(uncategorizedThisMonth)} this month${uncategorizedShare > 0 ? ` · ${uncategorizedShare}% of spending` : ''}`
+                : 'None with spending this month'}
+            </div>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={onReview}>Review</button>
+        </section>
+      )}
+
       <div className="overview-grid">
         <section className="card is-compact is-grouped" aria-labelledby="accounts-h">
           <div className="card-head">
             <h2 className="t-14 semi" id="accounts-h">Accounts</h2>
             <span className="t-12 muted">Net <Money value={netWorth} className="semi" style={{ color: 'var(--ink)' }} /></span>
           </div>
-          <ul className="rows is-compact">
-            {accounts.map(a => <AccountRow key={a.id} account={a} balance={balances[a.id]} onSelect={onSelectAccount} />)}
-          </ul>
+          <AccountGroups accounts={accounts} balances={balances} onSelectAccount={onSelectAccount} />
         </section>
 
         <section className="card is-grouped" aria-labelledby="spending-h">

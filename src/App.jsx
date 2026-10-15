@@ -11,6 +11,7 @@ import Allocations from './Allocations.jsx';
 import NetWorth from './NetWorth.jsx';
 import Reimbursements from './Reimbursements.jsx';
 import Import from './Import.jsx';
+import Review from './Review.jsx';
 import { getConnections, syncItem } from './lib/plaidApi.js';
 import { IconHome, IconList, IconClock, IconGrid, IconLayers, IconUpload, IconTrendingUp, IconReceipt, IconRefresh, IconClose, IconChevronRight } from './lib/icons.jsx';
 
@@ -194,7 +195,8 @@ function DashboardScreen({ session, theme, onThemeChange }) {
     return () => { clearTimeout(t); document.removeEventListener('keydown', onKey); };
   }, [sheetOpen, closeSheet]);
 
-  const activeLabel = ALL_TABS.find(t => t.key === tab)?.label || 'Overview';
+  // 'review' is reached from the Overview banner, not from the tab bar or sidebar.
+  const activeLabel = tab === 'review' ? 'Review' : (ALL_TABS.find(t => t.key === tab)?.label || 'Overview');
   const inMore = MORE_TABS.some(t => t.key === tab);
   const hid = household?.householdId;
 
@@ -246,7 +248,8 @@ function DashboardScreen({ session, theme, onThemeChange }) {
           </div>
           {loadErr && <ErrorState message={`Couldn't load your household: ${loadErr}`} />}
           {!loadErr && !household && <LoadingState />}
-          {household && tab === 'overview' && <Overview householdId={hid} refreshKey={refreshKey} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} />}
+          {household && tab === 'overview' && <Overview householdId={hid} refreshKey={refreshKey} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} onReview={() => go('review')} />}
+          {household && tab === 'review' && <Review householdId={hid} refreshKey={refreshKey} onBack={() => go('overview')} />}
           {household && tab === 'transactions' && (
             <Transactions
               householdId={hid}
