@@ -308,6 +308,18 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
     () => (transactions || []).filter(t => t.category === 'Uncategorized' && !t.is_transfer).length,
     [transactions],
   );
+  const uncategorizedMonthCount = useMemo(
+    () => (transactions || []).filter(t => t.category === 'Uncategorized' && !t.is_transfer && t.date.slice(0, 7) === thisMonthYm).length,
+    [transactions, thisMonthYm],
+  );
+  const [reviewCollapsed, setReviewCollapsed] = useState(() => {
+    try { return localStorage.getItem('ledger.reviewCollapsed') === '1'; } catch { return false; }
+  });
+  const toggleReviewCollapsed = () => setReviewCollapsed(c => {
+    const next = !c;
+    try { localStorage.setItem('ledger.reviewCollapsed', next ? '1' : '0'); } catch { /* storage unavailable */ }
+    return next;
+  });
   const uncategorizedThisMonth = (categorySpend.find(([cat]) => cat === 'Uncategorized') || [null, 0])[1];
   const uncategorizedShare = monthSpendTotal > 0 ? Math.round((uncategorizedThisMonth / monthSpendTotal) * 100) : 0;
   const netWorth = accounts ? accounts.reduce((s, a) => s + (balances[a.id] || 0), 0) : 0;
@@ -403,15 +415,27 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
         {heroValue < 0 && <span className="chip is-neg" style={{ alignSelf: 'flex-start' }}>Bills exceed cash by {fmtCAD(-heroValue)}</span>}
       </section>
 
-      {onReview && uncategorizedCount > 0 && (
-        <section className="review-banner" aria-label="Transactions needing a category">
-          <div>
-            <div className="t-14 semi">{uncategorizedCount} uncategorized transaction{uncategorizedCount === 1 ? '' : 's'}</div>
-            <div className="t-12">
-              {uncategorizedThisMonth > 0
-                ? `${fmtCAD(uncategorizedThisMonth)} this month${uncategorizedShare > 0 ? ` · ${uncategorizedShare}% of spending` : ''}`
-                : 'None with spending this month'}
-            </div>
+      {onReview && uncategorizedMonthCount > 0 && (
+        <section className={`review-banner${reviewCollapsed ? ' is-collapsed' : ''}`} aria-label="Transactions needing a category">
+          <button
+            type="button"
+            className="review-collapse"
+            onClick={toggleReviewCollapsed}
+            aria-expanded={!reviewCollapsed}
+            aria-label={reviewCollapsed ? 'Expand review reminder' : 'Collapse review reminder'}
+          >
+            {reviewCollapsed ? <IconChevronRight /> : <IconChevronDown />}
+          </button>
+          <div className="review-banner-text">
+            <div className="t-14 semi">{uncategorizedMonthCount} to categorize this month</div>
+            {!reviewCollapsed && (
+              <div className="t-12">
+                {uncategorizedThisMonth > 0
+                  ? `${fmtCAD(uncategorizedThisMonth)} spent${uncategorizedShare > 0 ? ` · ${uncategorizedShare}% of spending` : ''}`
+                  : 'No spending among them'}
+                {uncategorizedCount > uncategorizedMonthCount ? ` · ${uncategorizedCount - uncategorizedMonthCount} older` : ''}
+              </div>
+            )}
           </div>
           <button type="button" className="btn btn-primary" onClick={onReview}>Review</button>
         </section>

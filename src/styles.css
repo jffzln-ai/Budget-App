@@ -397,6 +397,9 @@ html.ios .sheet-section { text-transform: none; letter-spacing: 0; font-size: 13
 
 .review-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); background: var(--warn-soft); color: var(--ink); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
 .review-banner .btn { min-height: 44px; flex: none; }
+.review-banner-text { flex: 1; min-width: 0; }
+.review-collapse { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: var(--r-md); color: var(--ink); cursor: pointer; margin: calc(var(--sp-3) * -1) 0 calc(var(--sp-3) * -1) calc(var(--sp-4) * -1); }
+.review-banner.is-collapsed { padding-top: var(--sp-1); padding-bottom: var(--sp-1); }
 
 .acct-group + .acct-group { margin-top: var(--sp-2); }
 .acct-group-h { display: flex; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-1); }
