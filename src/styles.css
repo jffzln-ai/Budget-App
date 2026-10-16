@@ -233,6 +233,10 @@ button { touch-action: manipulation; }
 .cat-line { display: flex; align-items: center; gap: var(--sp-2); min-height: 32px; }
 .cat-name { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; flex-wrap: wrap; }
 .cat-amount { white-space: nowrap; }
+.cat-link { display: inline-flex; align-items: center; gap: 2px; padding: 0; background: none; border: 0; color: var(--ink); font: inherit; cursor: pointer; text-align: left; }
+.cat-link svg { opacity: .45; }
+.cat-link:hover { text-decoration: underline; }
+@media (pointer: coarse) { .cat-link { min-height: 44px; } }
 .cat-edit { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; margin-top: var(--sp-2); }
 .cat-edit .field-error { width: 100%; }
 

@@ -104,6 +104,7 @@ function DashboardScreen({ session, theme, onThemeChange }) {
   const [tab, setTab] = useState('overview');
   const [pendingAccountFilter, setPendingAccountFilter] = useState(null);
   const [pendingBreakdownOpen, setPendingBreakdownOpen] = useState(false);
+  const [pendingCategoryFilter, setPendingCategoryFilter] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   // Bumped after a sync. Pages reload their data in place when it changes,
@@ -143,6 +144,11 @@ function DashboardScreen({ session, theme, onThemeChange }) {
 
   function goToAccountTransactions(accountId) {
     setPendingAccountFilter(accountId);
+    go('transactions');
+  }
+
+  function goToCategoryTransactions(category) {
+    setPendingCategoryFilter(category);
     go('transactions');
   }
 
@@ -248,7 +254,7 @@ function DashboardScreen({ session, theme, onThemeChange }) {
           </div>
           {loadErr && <ErrorState message={`Couldn't load your household: ${loadErr}`} />}
           {!loadErr && !household && <LoadingState />}
-          {household && tab === 'overview' && <Overview householdId={hid} refreshKey={refreshKey} onSelectAccount={goToAccountTransactions} onViewSpending={goToSpendingBreakdown} onReview={() => go('review')} />}
+          {household && tab === 'overview' && <Overview householdId={hid} refreshKey={refreshKey} onSelectAccount={goToAccountTransactions} onSelectCategory={goToCategoryTransactions} onViewSpending={goToSpendingBreakdown} onReview={() => go('review')} />}
           {household && tab === 'review' && <Review householdId={hid} refreshKey={refreshKey} onBack={() => go('overview')} />}
           {household && tab === 'transactions' && (
             <Transactions
@@ -256,6 +262,8 @@ function DashboardScreen({ session, theme, onThemeChange }) {
               refreshKey={refreshKey}
               initialAccountFilter={pendingAccountFilter}
               onConsumeInitialFilter={() => setPendingAccountFilter(null)}
+              initialCategoryFilter={pendingCategoryFilter}
+              onConsumeInitialCategoryFilter={() => setPendingCategoryFilter(null)}
               initialBreakdownOpen={pendingBreakdownOpen}
               onConsumeInitialBreakdownOpen={() => setPendingBreakdownOpen(false)}
             />

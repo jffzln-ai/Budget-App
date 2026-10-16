@@ -28,7 +28,7 @@ function nextMonths(n) {
   return out;
 }
 
-function CategoryRow({ cat, amount, budget, maxSpend, editing, onEdit, onCancel, onSave, onRemove, flash }) {
+function CategoryRow({ cat, amount, budget, maxSpend, editing, onEdit, onCancel, onSave, onRemove, onOpen, flash }) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -70,7 +70,9 @@ function CategoryRow({ cat, amount, budget, maxSpend, editing, onEdit, onCancel,
     <li className={`cat${flash ? ' flash' : ''}`}>
       <div className="cat-line">
         <span className="cat-name">
-          <span className="t-14 semi">{cat}</span>
+          {onOpen
+            ? <button type="button" className="cat-link t-14 semi" onClick={() => onOpen(cat)} aria-label={`See ${cat} transactions this month`}>{cat}<IconChevronRight /></button>
+            : <span className="t-14 semi">{cat}</span>}
           {state === 'over' && <span className="chip is-neg">Over by {fmtCAD(amount - budget)}</span>}
           {state === 'near' && <span className="chip is-warn">{fmtCAD(budget - amount)} left</span>}
         </span>
@@ -160,7 +162,7 @@ function AccountGroups({ accounts, balances, onSelectAccount }) {
   });
 }
 
-export default function Overview({ householdId, refreshKey = 0, onSelectAccount, onViewSpending, onReview }) {
+export default function Overview({ householdId, refreshKey = 0, onSelectAccount, onSelectCategory, onViewSpending, onReview }) {
   const toast = useToast();
   const [accounts, setAccounts] = useState(null);
   const [rules, setRules] = useState(null);
@@ -474,6 +476,7 @@ export default function Overview({ householdId, refreshKey = 0, onSelectAccount,
                   onCancel={() => setEditingBudgetCat(null)}
                   onSave={saveBudgetFor}
                   onRemove={clearBudgetFor}
+                  onOpen={onSelectCategory}
                   flash={flashCats.includes(cat)}
                 />
               ))}

@@ -61,7 +61,7 @@ function periodRange(period, today) {
   }
 }
 
-export default function Transactions({ householdId, refreshKey = 0, initialAccountFilter, onConsumeInitialFilter, initialBreakdownOpen, onConsumeInitialBreakdownOpen }) {
+export default function Transactions({ householdId, refreshKey = 0, initialAccountFilter, onConsumeInitialFilter, initialCategoryFilter, onConsumeInitialCategoryFilter, initialBreakdownOpen, onConsumeInitialBreakdownOpen }) {
   const toast = useToast();
   const [accounts, setAccounts] = useState(null);
   const [transactions, setTransactions] = useState(null);
@@ -123,6 +123,18 @@ export default function Transactions({ householdId, refreshKey = 0, initialAccou
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAccountFilter]);
+
+  // From an Overview spending row: that category, for the month the Overview figure covers.
+  useEffect(() => {
+    if (initialCategoryFilter) {
+      setAccountFilter('all');
+      setCategoryFilter(initialCategoryFilter);
+      setPeriod('this_month');
+      setFiltersOpen(true);
+      if (onConsumeInitialCategoryFilter) onConsumeInitialCategoryFilter();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCategoryFilter]);
 
   useEffect(() => {
     if (initialBreakdownOpen) {
