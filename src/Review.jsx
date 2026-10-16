@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   getAccounts, getAllTransactions, getCustomCategories,
-  updateTransaction, setCategoryRule, applyCategoryToUncategorized,
+  updateTransaction, setCategoryRule, applyCategoryToIds,
 } from './lib/queries.js';
 import { LoadingState, ErrorState } from './lib/states.jsx';
 import { useToast } from './lib/toast.jsx';
 import { fmtCAD } from './lib/accounts.jsx';
 import { IconChevronRight } from './lib/icons.jsx';
+import { ruleKey, isETransfer } from './lib/ruleKey.js';
 
 function fmtSigned(n) {
   const sign = n < 0 ? '−' : '+';
@@ -91,8 +92,11 @@ export default function Review({ householdId, refreshKey = 0, onBack }) {
   const upNext = queue.slice(1, 3).map(id => byId[id]).filter(Boolean);
   const matchIds = useMemo(() => {
     if (!current || !transactions) return [];
-    return transactions.filter(t => t.id !== current.id && isUncategorized(t) && t.raw_description === current.raw_description).map(t => t.id);
+    const key = ruleKey(current.raw_description, current.amount);
+    return transactions.filter(t => t.id !== current.id && isUncategorized(t) && ruleKey(t.raw_description, t.amount) === key).map(t => t.id);
   }, [current, transactions]);
+  const currentKey = current ? ruleKey(current.raw_description, current.amount) : '';
+  const currentIsETransfer = current ? isETransfer(current.raw_description) : false;
   const leftToCategorize = useMemo(
     () => queue.reduce((sum, id) => (byId[id] && byId[id].amount < 0 ? sum + Math.abs(byId[id].amount) : sum), 0),
     [queue, byId],
@@ -105,8 +109,8 @@ export default function Review({ householdId, refreshKey = 0, onBack }) {
       await updateTransaction(current.id, { category });
       let affected = [current.id];
       if (remember) {
-        await setCategoryRule(householdId, current.raw_description, category);
-        await applyCategoryToUncategorized(householdId, current.raw_description, category);
+        await setCategoryRule(householdId, currentKey, category);
+        await applyCategoryToIds(matchIds, category);
         affected = [current.id, ...matchIds];
       }
       const done = new Set(affected);
@@ -159,6 +163,7 @@ export default function Review({ householdId, refreshKey = 0, onBack }) {
             <div className="t-12 muted">{fmtDay(current.date)} · {accountsById[current.account_id]?.name || 'Account'}</div>
             <div className="t-20 semi review-desc">{current.raw_description}</div>
             <div className={`review-amt display${current.amount > 0 ? ' pos' : ''}`}>{fmtSigned(current.amount)}</div>
+            {currentIsETransfer && <div className="t-12 muted">Interac e-transfer. The bank doesn't say who it was {current.amount < 0 ? 'to' : 'from'}, so the rule matches on the amount.</div>}
 
             <div className="t-12 caps muted" id="review-cat-label" style={{ marginTop: 8 }}>Category</div>
             <div className="review-chips" role="group" aria-labelledby="review-cat-label">
@@ -177,9 +182,13 @@ export default function Review({ householdId, refreshKey = 0, onBack }) {
             <label className="check review-remember">
               <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
               <span>
-                {matchIds.length > 0
-                  ? `Also apply to ${matchIds.length} other “${current.raw_description}” transaction${matchIds.length === 1 ? '' : 's'}, and future ones`
-                  : `Remember “${current.raw_description}” for future imports`}
+                {currentIsETransfer
+                  ? (matchIds.length > 0
+                    ? `Also apply to ${matchIds.length} other e-transfer${matchIds.length === 1 ? '' : 's'} of ${fmtCAD(Math.abs(current.amount))}, and future ones`
+                    : `Remember e-transfers of ${fmtCAD(Math.abs(current.amount))} ${current.amount < 0 ? 'out' : 'in'} for future imports`)
+                  : (matchIds.length > 0
+                    ? `Also apply to ${matchIds.length} other “${current.raw_description}” transaction${matchIds.length === 1 ? '' : 's'}, and future ones`
+                    : `Remember “${current.raw_description}” for future imports`)}
               </span>
             </label>
           </section>

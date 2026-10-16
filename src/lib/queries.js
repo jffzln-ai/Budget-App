@@ -271,6 +271,15 @@ export async function applyCategoryToUncategorized(householdId, pattern, categor
   if (error) throw error;
 }
 
+// Applies a category to specific transactions, but only while they are still
+// Uncategorized. Used where the match is not an exact description (e-transfers).
+export async function applyCategoryToIds(ids, category) {
+  if (!ids.length) return;
+  const { error } = await supabase.from('transactions').update({ category })
+    .in('id', ids).eq('category', 'Uncategorized').eq('is_transfer', false);
+  if (error) throw error;
+}
+
 export async function linkTransfer(txnId1, txnId2) {
   const gid = `manual_${txnId1}_${txnId2}`;
   const { error: e1 } = await supabase.from('transactions').update({ transfer_group_id: gid, needs_review: false }).eq('id', txnId1);

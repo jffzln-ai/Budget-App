@@ -1,6 +1,7 @@
 import { getAuthedHousehold } from '../_lib/auth.js';
 import { plaidClient } from '../_lib/plaidClient.js';
 import { categorizeRaw } from '../../src/lib/categorize.js';
+import { ruleKey } from '../../src/lib/ruleKey.js';
 import { matchTransfers, detectNewRecurring, advanceRulesFromTransactions } from '../../src/lib/reconcile.js';
 
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
       if (!account) continue; // this Plaid account hasn't been mapped to a Ledger account yet
       const amount = round2(-t.amount); // Plaid: positive = money out. Ours: positive = inflow.
       const cat = categorizeRaw(t.name, amount, { type: account.type, name: account.name });
-      const category = !cat.is_transfer && ruleByPattern[t.name] ? ruleByPattern[t.name] : cat.category;
+      const category = !cat.is_transfer && (ruleByPattern[ruleKey(t.name, amount)] || ruleByPattern[t.name]) ? (ruleByPattern[ruleKey(t.name, amount)] || ruleByPattern[t.name]) : cat.category;
       toInsert.push({
         household_id: householdId, account_id: account.id, date: t.date, raw_description: t.name,
         amount, running_balance: null, category, is_transfer: cat.is_transfer, needs_review: cat.needs_review,
